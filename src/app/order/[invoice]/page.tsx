@@ -17,6 +17,7 @@ import {
   Download,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
+import { createClientQris } from "@/lib/mustikapay-client";
 import Link from "next/link";
 
 export default function OrderDetailPage() {
@@ -40,8 +41,24 @@ export default function OrderDetailPage() {
     const fetchOrder = async () => {
       try {
         const res = await axios.get(`/api/orders/${invoice}`);
-        if (res.data?.success) {
-          setOrder(res.data.order);
+        if (res.data?.success && res.data.order) {
+          const ord = res.data.order;
+          setOrder(ord);
+
+          // Self-heal: jika order PENDING tapi belum ada qrString, generate langsung dari browser!
+          if (ord.status === "PENDING" && !ord.qrString && ord.amount > 0) {
+            createClientQris(ord.amount).then(async (qris) => {
+              if (qris) {
+                const patch = await axios.post("/api/orders/attach-qris", {
+                  invoiceNumber: invoice,
+                  ...qris,
+                });
+                if (patch.data?.success) {
+                  setOrder(patch.data.order);
+                }
+              }
+            });
+          }
         }
       } catch (err) {
         console.error("Gagal load order:", err);

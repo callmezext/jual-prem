@@ -16,6 +16,7 @@ export async function POST(req: Request) {
       planSlug,
       targetEmail,
       targetNickname,
+      qrisData,
     } = await req.json();
 
     // 1. Cari user di database dengan berbagai fallback
@@ -145,12 +146,27 @@ export async function POST(req: Request) {
     }
 
     // Buat QRIS via Mustika Payment (jika nominal > 0)
-    const qris = await mustikapay.createQris({
-      invoiceNumber,
-      amount,
-      customerName: user.displayName || user.email.split("@")[0],
-      customerEmail: user.email,
-    });
+    const clientQris = qrisData;
+    let qrString = clientQris?.qrString || null;
+    let qrImageUrl = clientQris?.qrImageUrl || null;
+    let gatewayRefId = clientQris?.gatewayRefId || null;
+
+    // Jika belum disediakan oleh browser pengguna, coba buat di server
+    if (!qrString || !gatewayRefId) {
+      try {
+        const qris = await mustikapay.createQris({
+          invoiceNumber,
+          amount,
+          customerName: user.displayName || user.email.split("@")[0],
+          customerEmail: user.email,
+        });
+        qrString = qris.qrString;
+        qrImageUrl = qris.qrImageUrl || null;
+        gatewayRefId = qris.transactionId;
+      } catch (err: any) {
+        console.warn("Server MustikaPay QRIS creation failed (will be attached by client browser):", err.message);
+      }
+    }
 
     // Simpan order di database
     const order = await prisma.order.create({
@@ -164,9 +180,9 @@ export async function POST(req: Request) {
         targetNickname: targetNickname || null,
         amount,
         status: "PENDING",
-        qrString: qris.qrString,
-        qrImageUrl: qris.qrImageUrl,
-        gatewayRefId: qris.transactionId,
+        qrString,
+        qrImageUrl,
+        gatewayRefId,
       },
     });
 

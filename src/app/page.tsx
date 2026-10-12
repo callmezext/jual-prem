@@ -24,6 +24,7 @@ import {
   Code2,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
+import { createClientQris } from "@/lib/mustikapay-client";
 
 interface MembershipPlanItem {
   id: string;
@@ -65,6 +66,9 @@ export default function HomePage() {
     }
 
     try {
+      const selectedPlan = plans.find((p) => p.slug === planSlug);
+      const qrisData = selectedPlan ? await createClientQris(selectedPlan.price) : null;
+
       const res = await axios.post("/api/orders/create", {
         userId: dbUser?.id || undefined,
         firebaseUid: firebaseUser.uid,
@@ -72,6 +76,7 @@ export default function HomePage() {
         userDisplayName: firebaseUser.displayName || undefined,
         orderType: "MEMBERSHIP",
         planSlug,
+        qrisData: qrisData || undefined,
       });
       if (res.data?.order?.invoiceNumber) {
         router.push(`/order/${res.data.order.invoiceNumber}`);

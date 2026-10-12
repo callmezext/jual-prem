@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatRupiah } from "@/lib/utils";
+import { createClientQris } from "@/lib/mustikapay-client";
 
 export default function AktivasiPage() {
   const { firebaseUser, dbUser, loading, openAuthModal } = useAuth();
@@ -106,6 +107,10 @@ export default function AktivasiPage() {
 
     try {
       setIsSubmittingSingle(true);
+
+      // Buat QRIS langsung dari browser client untuk menghindari Cloudflare 403
+      const qrisData = await createClientQris(1500);
+
       const res = await axios.post("/api/orders/create", {
         userId: dbUser?.id || undefined,
         firebaseUid: firebaseUser.uid,
@@ -114,6 +119,7 @@ export default function AktivasiPage() {
         orderType: "SINGLE_VERIFY",
         targetEmail: targetEmail.trim(),
         targetNickname: targetNickname.trim() || undefined,
+        qrisData: qrisData || undefined,
       });
 
       if (res.data?.order?.invoiceNumber) {
