@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
@@ -33,6 +33,7 @@ export default function OrderDetailPage() {
   const [resending, setResending] = useState(false);
   const [resendNotice, setResendNotice] = useState("");
   const [copiedInvoice, setCopiedInvoice] = useState(false);
+  const attachingQrisRef = useRef(false);
 
   // Polling data order setiap 3 detik jika status PENDING atau WAITING_LINK
   useEffect(() => {
@@ -46,18 +47,23 @@ export default function OrderDetailPage() {
           setOrder(ord);
 
           // Self-heal: jika order PENDING tapi belum ada qrString, generate langsung dari browser!
-          if (ord.status === "PENDING" && !ord.qrString && ord.amount > 0) {
-            createClientQris(ord.amount).then(async (qris) => {
-              if (qris) {
-                const patch = await axios.post("/api/orders/attach-qris", {
-                  invoiceNumber: invoice,
-                  ...qris,
-                });
-                if (patch.data?.success) {
-                  setOrder(patch.data.order);
+          if (ord.status === "PENDING" && !ord.qrString && ord.amount > 0 && !attachingQrisRef.current) {
+            attachingQrisRef.current = true;
+            createClientQris(ord.amount)
+              .then(async (qris) => {
+                if (qris) {
+                  const patch = await axios.post("/api/orders/attach-qris", {
+                    invoiceNumber: invoice,
+                    ...qris,
+                  });
+                  if (patch.data?.success) {
+                    setOrder(patch.data.order);
+                  }
                 }
-              }
-            });
+              })
+              .finally(() => {
+                attachingQrisRef.current = false;
+              });
           }
         }
       } catch (err) {
