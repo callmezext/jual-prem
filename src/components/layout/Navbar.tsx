@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useState } from "react";
 import axios from "axios";
@@ -21,9 +22,18 @@ import {
 import UserAvatar from "@/components/ui/UserAvatar";
 
 export default function Navbar() {
+  const pathname = usePathname();
   const { firebaseUser, dbUser, logout, openAuthModal } = useAuth();
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Jangan tampilkan hamburger di halaman sambutan (landing page '/')
+  const isHome = pathname === "/";
+
+  // Tutup drawer menu otomatis ketika berpindah halaman
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     axios
@@ -35,8 +45,8 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 bg-[#09090b]/95 backdrop-blur border-b border-[#27272a]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Brand Logo (Kiri) */}
-        <Link href="/" className="flex items-center gap-2.5 group">
+        {/* Brand Logo (Kiri) - Diarahkan tetap ke Dashboard Aktivasi */}
+        <Link href="/aktivasi" className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-lg bg-[#18181b] border border-[#27272a] flex items-center justify-center text-emerald-400 group-hover:border-emerald-500/50 transition-colors">
             <span className="font-mono font-bold text-sm tracking-tight">AM</span>
           </div>
@@ -51,7 +61,7 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* Bagian Kanan: User Profile & Tombol Hamburger Menu (HANYA MUNCUL JIKA SUDAH LOGIN) */}
+        {/* Bagian Kanan: User Profile & Tombol Hamburger Menu (Hanya muncul jika sudah di dashboard user) */}
         <div className="flex items-center gap-3">
           {firebaseUser ? (
             <div className="flex items-center gap-2">
@@ -89,14 +99,16 @@ export default function Navbar() {
                 <LogOut className="w-4 h-4" />
               </button>
 
-              {/* Tombol Hamburger Menu: Khusus Pengguna yang Sudah Login */}
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                aria-label={menuOpen ? "Tutup menu navigasi" : "Buka menu navigasi"}
-                className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#121215] border border-[#27272a] text-zinc-200 hover:text-white hover:bg-[#18181b] transition-colors ml-1"
-              >
-                {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
+              {/* Tombol Hamburger Menu: Khusus Pengguna yang Sudah Login DAN BUKAN di Halaman Sambutan */}
+              {!isHome && (
+                <button
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  aria-label={menuOpen ? "Tutup menu navigasi" : "Buka menu navigasi"}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#121215] border border-[#27272a] text-zinc-200 hover:text-white hover:bg-[#18181b] transition-colors ml-1"
+                >
+                  {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+              )}
             </div>
           ) : (
             /* Jika Belum Login: Tombol Daftar & Masuk Akun (Tanpa Hamburger) */
@@ -119,8 +131,8 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Drawer Menu Navigasi (Hanya terbuka jika pengguna sudah login dan menuOpen aktif) */}
-      {firebaseUser && menuOpen && (
+      {/* Drawer Menu Navigasi (Hanya muncul jika sudah login, BUKAN di halaman sambutan, dan menuOpen aktif) */}
+      {firebaseUser && !isHome && menuOpen && (
         <div className="border-t border-[#27272a] bg-[#09090b] px-4 sm:px-6 py-5 shadow-2xl animate-in slide-in-from-top-2 duration-150">
           <div className="max-w-6xl mx-auto space-y-4">
             {/* Status Server */}
