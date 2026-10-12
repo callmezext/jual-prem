@@ -94,6 +94,11 @@ export default function AktivasiPage() {
     e.preventDefault();
     setSingleError("");
 
+    if (!firebaseUser) {
+      openAuthModal("login");
+      return;
+    }
+
     if (!targetEmail || !targetEmail.includes("@")) {
       setSingleError("Masukkan alamat email Alight Motion yang valid.");
       return;
@@ -103,6 +108,9 @@ export default function AktivasiPage() {
       setIsSubmittingSingle(true);
       const res = await axios.post("/api/orders/create", {
         userId: dbUser?.id || undefined,
+        firebaseUid: firebaseUser.uid,
+        userEmail: firebaseUser.email,
+        userDisplayName: firebaseUser.displayName || undefined,
         orderType: "SINGLE_VERIFY",
         targetEmail: targetEmail.trim(),
         targetNickname: targetNickname.trim() || undefined,
@@ -196,6 +204,14 @@ export default function AktivasiPage() {
     e.preventDefault();
     setMemberNotice({ type: "idle", text: "" });
 
+    if (!memberTargetEmail || !memberTargetEmail.includes("@")) {
+      setMemberNotice({
+        type: "error",
+        text: "Masukkan alamat email akun Alight Motion target.",
+      });
+      return;
+    }
+
     if (!memberMagicLink || !memberMagicLink.includes("alightcreative.com")) {
       setMemberNotice({
         type: "error",
@@ -204,19 +220,35 @@ export default function AktivasiPage() {
       return;
     }
 
+    if (!dbUser?.apiKey) {
+      setMemberNotice({
+        type: "error",
+        text: "Akun Anda belum memiliki paket reseller / API Key aktif.",
+      });
+      return;
+    }
+
     try {
       setMemberActivating(true);
-      const res = await axios.post("/api/orders/activate", {
-        magicLink: memberMagicLink.trim(),
-        targetEmail: memberTargetEmail.trim() || undefined,
-        nickname: memberNickname.trim() || undefined,
-      });
+      const res = await axios.post(
+        "/api/v1/activate",
+        {
+          email: memberTargetEmail.trim(),
+          magicLink: memberMagicLink.trim(),
+          nickname: memberNickname.trim() || undefined,
+        },
+        {
+          headers: {
+            "x-api-key": dbUser.apiKey,
+          },
+        }
+      );
 
       if (res.data?.success) {
         setMemberNotice({
           type: "success",
           text: `Aktivasi Pro 1 Tahun berhasil. Sisa kuota membership Anda: ${
-            res.data?.remainingQuota === -1 ? "Tak Terbatas" : res.data?.remainingQuota
+            res.data?.quota?.isUnlimited ? "Tak Terbatas" : res.data?.quota?.remaining
           }.`,
         });
         setMemberMagicLink("");

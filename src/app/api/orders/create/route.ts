@@ -2,23 +2,64 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { mustikapay } from "@/lib/mustikapay";
 import { ampro } from "@/lib/ampro";
-import { generateInvoiceNumber } from "@/lib/utils";
+import { generateInvoiceNumber, generateApiKey } from "@/lib/utils";
 
 export async function POST(req: Request) {
   try {
-    const { userId, orderType, planId, targetEmail, targetNickname } = await req.json();
+    const {
+      userId,
+      firebaseUid,
+      userEmail,
+      userDisplayName,
+      orderType,
+      planId,
+      planSlug,
+      targetEmail,
+      targetNickname,
+    } = await req.json();
 
-    if (!userId) {
-      return NextResponse.json({ error: "Silakan login terlebih dahulu" }, { status: 401 });
+    // 1. Cari user di database dengan berbagai fallback
+    let user = null;
+    if (userId) {
+      user = await prisma.user.findUnique({ where: { id: userId } });
+    }
+    if (!user && firebaseUid) {
+      user = await prisma.user.findUnique({ where: { firebaseUid } });
+    }
+    if (!user && userEmail) {
+      user = await prisma.user.findFirst({ where: { email: userEmail } });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    // 2. Auto-heal: Jika user sudah login Firebase tapi belum sempat tersimpan di PostgreSQL
+    if (!user && (firebaseUid || userEmail)) {
+      try {
+        const emailToSave = userEmail || "user@enchant-store.com";
+        const uidToSave = firebaseUid || `fb_${Date.now()}`;
+        const userCount = await prisma.user.count();
+        const isAdminEmail = emailToSave.toLowerCase() === "gunturafandy5@gmail.com";
+        const role = userCount === 0 || isAdminEmail ? "admin" : "customer";
+
+        user = await prisma.user.create({
+          data: {
+            firebaseUid: uidToSave,
+            email: emailToSave,
+            displayName: userDisplayName || emailToSave.split("@")[0],
+            role,
+            apiKey: generateApiKey(),
+          },
+        });
+      } catch (createErr) {
+        console.warn("Auto-create user during order error:", createErr);
+      }
+    }
+
     if (!user) {
-      return NextResponse.json({ error: "User tidak ditemukan" }, { status: 404 });
+      return NextResponse.json({ error: "Silakan login terlebih dahulu" }, { status: 401 });
     }
 
     let amount = 1000;
     let planName: string | null = null;
+    let activePlanId = planId;
 
     if (orderType === "SINGLE_VERIFY") {
       if (!targetEmail || !targetEmail.includes("@")) {
@@ -43,17 +84,20 @@ export async function POST(req: Request) {
         amount = isNaN(parsed) ? 1000 : parsed;
       }
     } else if (orderType === "MEMBERSHIP") {
-      if (!planId) {
-        return NextResponse.json({ error: "Paket membership wajib dipilih" }, { status: 400 });
+      let plan = null;
+      if (planId) {
+        plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
+      } else if (planSlug) {
+        plan = await prisma.membershipPlan.findUnique({ where: { slug: planSlug } });
       }
 
-      const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
       if (!plan || !plan.isActive) {
         return NextResponse.json({ error: "Paket membership tidak tersedia" }, { status: 404 });
       }
 
       amount = plan.price;
       planName = plan.name;
+      activePlanId = plan.id;
     } else {
       return NextResponse.json({ error: "Tipe order tidak valid" }, { status: 400 });
     }
@@ -67,7 +111,7 @@ export async function POST(req: Request) {
           invoiceNumber,
           userId: user.id,
           orderType,
-          planId: planId || null,
+          planId: activePlanId || null,
           planName,
           targetEmail: targetEmail || null,
           targetNickname: targetNickname || null,
@@ -114,7 +158,7 @@ export async function POST(req: Request) {
         invoiceNumber,
         userId: user.id,
         orderType,
-        planId: planId || null,
+        planId: activePlanId || null,
         planName,
         targetEmail: targetEmail || null,
         targetNickname: targetNickname || null,

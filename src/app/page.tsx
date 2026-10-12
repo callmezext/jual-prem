@@ -59,9 +59,17 @@ export default function HomePage() {
   }, []);
 
   const handleBuyPlan = async (planSlug: string) => {
+    if (!firebaseUser) {
+      openAuthModal("login");
+      return;
+    }
+
     try {
       const res = await axios.post("/api/orders/create", {
         userId: dbUser?.id || undefined,
+        firebaseUid: firebaseUser.uid,
+        userEmail: firebaseUser.email,
+        userDisplayName: firebaseUser.displayName || undefined,
         orderType: "MEMBERSHIP",
         planSlug,
       });
