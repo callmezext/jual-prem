@@ -32,6 +32,7 @@ export default function OrderDetailPage() {
   const [resending, setResending] = useState(false);
   const [resendNotice, setResendNotice] = useState("");
   const [copiedInvoice, setCopiedInvoice] = useState(false);
+  const [qrViewMode, setQrViewMode] = useState<"standard" | "banner">("standard");
 
   // Polling data order setiap 3 detik jika status PENDING atau WAITING_LINK
   useEffect(() => {
@@ -212,23 +213,62 @@ export default function OrderDetailPage() {
               </span>
             </div>
 
+            {/* Toggle Tampilan QR */}
+            {order.qrImageUrl && (
+              <div className="flex items-center justify-center gap-1 p-1 bg-zinc-100 rounded-lg text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => setQrViewMode("standard")}
+                  className={`flex-1 py-1.5 px-3 rounded-md transition-colors ${
+                    qrViewMode === "standard"
+                      ? "bg-white text-zinc-900 shadow-sm font-semibold"
+                      : "text-zinc-500 hover:text-zinc-800"
+                  }`}
+                >
+                  QR Standar (Mudah Scan)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQrViewMode("banner")}
+                  className={`flex-1 py-1.5 px-3 rounded-md transition-colors ${
+                    qrViewMode === "banner"
+                      ? "bg-white text-zinc-900 shadow-sm font-semibold"
+                      : "text-zinc-500 hover:text-zinc-800"
+                  }`}
+                >
+                  Banner Resmi
+                </button>
+              </div>
+            )}
+
             {/* QR Code Container */}
-            <div className="p-3 bg-white border border-zinc-200 rounded-xl flex items-center justify-center">
-              {order.qrImageUrl ? (
+            <div className="p-3 bg-white border border-zinc-200 rounded-xl flex items-center justify-center min-h-[280px]">
+              {qrViewMode === "standard" && order.qrString ? (
+                <div className="p-2 bg-white rounded-lg flex items-center justify-center">
+                  <QRCodeSVG
+                    value={order.qrString}
+                    size={250}
+                    level="M"
+                    includeMargin={true}
+                  />
+                </div>
+              ) : order.qrImageUrl ? (
                 <img
                   src={order.qrImageUrl}
                   alt={`QRIS ${order.invoiceNumber}`}
-                  className="w-[260px] h-[260px] object-contain mx-auto"
+                  className="w-full max-h-[360px] object-contain mx-auto rounded-lg shadow-sm"
                 />
               ) : order.qrString ? (
-                <QRCodeSVG
-                  value={order.qrString}
-                  size={260}
-                  level="M"
-                  includeMargin={true}
-                />
+                <div className="p-2 bg-white rounded-lg flex items-center justify-center">
+                  <QRCodeSVG
+                    value={order.qrString}
+                    size={250}
+                    level="M"
+                    includeMargin={true}
+                  />
+                </div>
               ) : (
-                <div className="w-[260px] h-[260px] flex items-center justify-center text-xs text-zinc-500 font-mono">
+                <div className="w-[250px] h-[250px] flex items-center justify-center text-xs text-zinc-500 font-mono">
                   Memuat QRIS...
                 </div>
               )}
