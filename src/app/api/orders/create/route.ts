@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { mustikapay } from "@/lib/mustikapay";
+import { mustikapay, buildMerchantQris } from "@/lib/mustikapay";
 import { ampro } from "@/lib/ampro";
 import { generateInvoiceNumber, generateApiKey } from "@/lib/utils";
 
@@ -151,7 +151,7 @@ export async function POST(req: Request) {
     let qrImageUrl = clientQris?.qrImageUrl || null;
     let gatewayRefId = clientQris?.gatewayRefId || null;
 
-    // Jika belum disediakan oleh browser pengguna, coba buat di server
+    // Jika belum disediakan oleh browser pengguna, buat di server
     if (!qrString || !gatewayRefId) {
       try {
         const qris = await mustikapay.createQris({
@@ -164,8 +164,14 @@ export async function POST(req: Request) {
         qrImageUrl = qris.qrImageUrl || null;
         gatewayRefId = qris.transactionId;
       } catch (err: any) {
-        console.warn("Server MustikaPay QRIS creation failed (will be attached by client browser):", err.message);
+        console.warn("Server MustikaPay QRIS creation failed, using resilient fallback:", err.message);
       }
+    }
+
+    // Jaminan 100% QRIS selalu tersedia dan tidak pernah null
+    if (!qrString) {
+      qrString = buildMerchantQris(amount, invoiceNumber);
+      gatewayRefId = gatewayRefId || `QR_${invoiceNumber}`;
     }
 
     // Simpan order di database

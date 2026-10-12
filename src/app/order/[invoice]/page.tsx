@@ -49,7 +49,7 @@ export default function OrderDetailPage() {
           // Self-heal: jika order PENDING tapi belum ada qrString, generate langsung dari browser!
           if (ord.status === "PENDING" && !ord.qrString && ord.amount > 0 && !attachingQrisRef.current) {
             attachingQrisRef.current = true;
-            createClientQris(ord.amount)
+            createClientQris(ord.amount, invoice)
               .then(async (qris) => {
                 if (qris) {
                   const patch = await axios.post("/api/orders/attach-qris", {
@@ -246,8 +246,31 @@ export default function OrderDetailPage() {
                   includeMargin={true}
                 />
               ) : (
-                <div className="w-[270px] h-[270px] flex items-center justify-center text-xs text-zinc-500 font-mono">
-                  Memuat Kode QR...
+                <div className="w-[270px] h-[270px] flex flex-col items-center justify-center gap-3 text-zinc-500 font-mono text-center px-4">
+                  <Loader2 className="w-7 h-7 text-emerald-600 animate-spin" />
+                  <span className="text-xs font-sans text-zinc-700 font-medium">
+                    Menyiapkan Kode QRIS...
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (order?.amount && invoice) {
+                        const qris = await createClientQris(order.amount, invoice);
+                        if (qris) {
+                          const patch = await axios.post("/api/orders/attach-qris", {
+                            invoiceNumber: invoice,
+                            ...qris,
+                          });
+                          if (patch.data?.success) {
+                            setOrder(patch.data.order);
+                          }
+                        }
+                      }
+                    }}
+                    className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 underline font-sans font-semibold cursor-pointer"
+                  >
+                    Muat Ulang QRIS
+                  </button>
                 </div>
               )}
             </div>
