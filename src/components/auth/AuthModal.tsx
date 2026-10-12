@@ -99,8 +99,20 @@ export default function AuthModal() {
       await loginGoogle();
       resetForm();
     } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user") {
-        setErrorMsg("Gagal masuk dengan Google. Silakan coba kembali.");
+      console.error("Firebase Google Auth error:", err);
+      const code = err.code || "";
+      if (code === "auth/popup-closed-by-user") {
+        // User sengaja menutup popup, tidak perlu tampilkan error mengganggu
+      } else if (code === "auth/unauthorized-domain") {
+        setErrorMsg(
+          "Domain belum diizinkan di Firebase Console. Tambahkan domain 'jual-am.vercel.app' ke menu Authentication > Settings > Authorized domains di console.firebase.google.com."
+        );
+      } else if (code === "auth/popup-blocked") {
+        setErrorMsg("Jendela pop-up diblokir oleh browser Anda. Harap izinkan pop-up untuk situs ini lalu coba lagi.");
+      } else if (code === "auth/cancelled-popup-request") {
+        // Pop-up request dibatalkan karena ada popup lain
+      } else {
+        setErrorMsg(err.message || "Gagal masuk dengan Google. Silakan coba kembali.");
       }
     } finally {
       setSubmitting(false);
