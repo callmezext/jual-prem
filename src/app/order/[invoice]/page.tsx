@@ -15,6 +15,9 @@ import {
   ShieldCheck,
   ExternalLink,
   Download,
+  XCircle,
+  AlertTriangle,
+  Timer,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 import { createClientQris } from "@/lib/mustikapay-client";
@@ -33,11 +36,17 @@ export default function OrderDetailPage() {
   const [resending, setResending] = useState(false);
   const [resendNotice, setResendNotice] = useState("");
   const [copiedInvoice, setCopiedInvoice] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const attachingQrisRef = useRef(false);
 
-  // Polling data order setiap 3 detik jika status PENDING atau WAITING_LINK
+  // Polling data order setiap 3 detik hanya jika status PENDING, WAITING_LINK, atau ACTIVATING
   useEffect(() => {
     if (!invoice) return;
+    if (order?.status && !["PENDING", "WAITING_LINK", "ACTIVATING"].includes(order.status)) {
+      return;
+    }
 
     const fetchOrder = async () => {
       try {
@@ -76,7 +85,63 @@ export default function OrderDetailPage() {
     fetchOrder();
     const interval = setInterval(fetchOrder, 3000);
     return () => clearInterval(interval);
-  }, [invoice]);
+  }, [invoice, order?.status]);
+
+  // Hitung mundur kadaluarsa 10 menit (600 detik) untuk status PENDING
+  useEffect(() => {
+    if (!order?.createdAt || order.status !== "PENDING") {
+      setTimeLeft(null);
+      return;
+    }
+
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const createdTime = new Date(order.createdAt).getTime();
+    const expiresAt = createdTime + TEN_MINUTES_MS;
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const diff = Math.floor((expiresAt - now) / 1000);
+      if (diff <= 0) {
+        setTimeLeft(0);
+        // Tandai kadaluarsa ke backend
+        axios
+          .patch(`/api/orders/${invoice}`, { action: "EXPIRE" })
+          .then((res) => {
+            if (res.data?.success) setOrder(res.data.order);
+          })
+          .catch(() => {});
+      } else {
+        setTimeLeft(diff);
+      }
+    };
+
+    updateTimer();
+    const timer = setInterval(updateTimer, 1000);
+    return () => clearInterval(timer);
+  }, [order?.createdAt, order?.status, invoice]);
+
+  const formatCountdown = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  // Handler: Batalkan Pesanan (Gak Jadi Pesan)
+  const handleCancelOrder = async () => {
+    try {
+      setCancelling(true);
+      const res = await axios.post("/api/orders/cancel", { invoiceNumber: invoice });
+      if (res.data?.success) {
+        setOrder(res.data.order);
+        setShowCancelModal(false);
+      }
+    } catch (err: any) {
+      console.error("Gagal membatalkan pesanan:", err);
+      alert(err.response?.data?.error || "Gagal membatalkan pesanan.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   // Handle Submit Activate Magic Link (Khusus Single Verify)
   const handleActivateLink = async (e: React.FormEvent) => {
@@ -186,6 +251,8 @@ export default function OrderDetailPage() {
   const isPending = order.status === "PENDING";
   const isWaitingLink = order.status === "WAITING_LINK";
   const isCompleted = order.status === "COMPLETED";
+  const isCancelled = order.status === "CANCELLED";
+  const isExpired = order.status === "EXPIRED";
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 space-y-6">
@@ -203,6 +270,18 @@ export default function OrderDetailPage() {
             >
               {copiedInvoice ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
+            {isCancelled && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-rose-950/70 border border-rose-800 text-rose-300">
+                <XCircle className="w-3 h-3" />
+                Dibatalkan
+              </span>
+            )}
+            {isExpired && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-950/70 border border-amber-800 text-amber-300">
+                <Clock className="w-3 h-3" />
+                Kadaluarsa
+              </span>
+            )}
           </div>
           <h1 className="text-base font-bold text-white mt-1">
             {order.orderType === "SINGLE_VERIFY"
@@ -222,9 +301,23 @@ export default function OrderDetailPage() {
       {/* KONDISI 1: PENDING (TAMPILAN QRIS) */}
       {isPending && (
         <div className="p-6 md:p-8 rounded-xl bg-[#121215] border border-[#27272a] text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-amber-950/40 border border-amber-800/50 text-amber-300 text-xs font-mono">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Menunggu Pembayaran QRIS</span>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-950/40 border border-amber-800/50 text-amber-300 text-xs font-mono">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Menunggu Pembayaran QRIS</span>
+            </div>
+            {timeLeft !== null && (
+              <div
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold border transition-all ${
+                  timeLeft < 120
+                    ? "bg-rose-950/70 border-rose-700/80 text-rose-300 animate-pulse shadow-sm shadow-rose-900/30"
+                    : "bg-zinc-900 border-zinc-700/70 text-amber-300"
+                }`}
+              >
+                <Timer className={`w-3.5 h-3.5 ${timeLeft < 120 ? "text-rose-400" : "text-amber-400"}`} />
+                <span>Kadaluarsa dalam: {formatCountdown(timeLeft)}</span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1 max-w-md mx-auto">
@@ -307,6 +400,14 @@ export default function OrderDetailPage() {
               <Download className="w-4 h-4 text-emerald-400" />
               <span>Unduh Kode QR</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setShowCancelModal(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-rose-950/20 hover:bg-rose-950/50 text-rose-300 hover:text-rose-200 border border-rose-900/40 hover:border-rose-800/60 font-medium text-xs transition-colors min-h-[44px]"
+            >
+              <XCircle className="w-4 h-4 text-rose-400" />
+              <span>Batalkan Pesanan</span>
+            </button>
           </div>
 
           <div className="space-y-3 pt-1">
@@ -314,6 +415,68 @@ export default function OrderDetailPage() {
               <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
               <span>Sistem memeriksa status pembayaran otomatis setiap 3 detik.</span>
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* KONDISI: CANCELLED (PESANAN DIBATALKAN) */}
+      {isCancelled && (
+        <div className="p-6 md:p-8 rounded-xl bg-[#121215] border border-rose-900/40 text-center space-y-6">
+          <div className="w-12 h-12 rounded-full bg-rose-950/80 border border-rose-700/60 mx-auto flex items-center justify-center text-rose-400">
+            <XCircle className="w-6 h-6" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-bold text-white">Pesanan Telah Dibatalkan</h2>
+            <p className="text-xs text-zinc-400 max-w-md mx-auto">
+              Pesanan #{order.invoiceNumber} telah dibatalkan dan kode pembayaran QRIS sudah dinonaktifkan.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link
+              href={order.orderType === "SINGLE_VERIFY" ? "/aktivasi" : "/#pricing"}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors"
+            >
+              Buat Pesanan Baru
+            </Link>
+            <Link
+              href="/"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-[#18181b] hover:bg-[#27272a] text-zinc-300 font-medium text-xs border border-[#27272a] transition-colors"
+            >
+              Kembali ke Beranda
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* KONDISI: EXPIRED (WAKTU 10 MENIT HABIS) */}
+      {isExpired && (
+        <div className="p-6 md:p-8 rounded-xl bg-[#121215] border border-amber-900/40 text-center space-y-6">
+          <div className="w-12 h-12 rounded-full bg-amber-950/80 border border-amber-700/60 mx-auto flex items-center justify-center text-amber-400">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-bold text-white">Waktu Pembayaran Telah Habis</h2>
+            <p className="text-xs text-zinc-400 max-w-md mx-auto">
+              Batas waktu pembayaran 10 menit untuk invoice #{order.invoiceNumber} telah berakhir. Kode QRIS sudah dinonaktifkan demi keamanan. Silakan buat pesanan baru untuk melanjutkan.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link
+              href={order.orderType === "SINGLE_VERIFY" ? "/aktivasi" : "/#pricing"}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors"
+            >
+              Pesan Ulang Sekarang
+            </Link>
+            <Link
+              href="/"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-[#18181b] hover:bg-[#27272a] text-zinc-300 font-medium text-xs border border-[#27272a] transition-colors"
+            >
+              Kembali ke Beranda
+            </Link>
           </div>
         </div>
       )}
@@ -472,6 +635,43 @@ export default function OrderDetailPage() {
             >
               Lihat Dashboard Saya
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI BATALKAN PESANAN */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="max-w-sm w-full bg-[#121215] border border-[#27272a] rounded-2xl p-6 space-y-4 text-center shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-full bg-rose-950/60 border border-rose-800/60 text-rose-400 mx-auto flex items-center justify-center">
+              <XCircle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-white">Batalkan Pesanan?</h3>
+              <p className="text-xs text-zinc-400">
+                Apakah Anda yakin ingin membatalkan tagihan QRIS ini? Kode QR tidak akan dapat digunakan lagi.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-[#18181b] hover:bg-[#27272a] text-zinc-300 text-xs font-medium border border-[#27272a] transition-colors"
+              >
+                Kembali
+              </button>
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={handleCancelOrder}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ya, Batalkan"}
+              </button>
+            </div>
           </div>
         </div>
       )}

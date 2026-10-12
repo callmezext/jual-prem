@@ -21,6 +21,22 @@ export async function GET(req: Request, { params }: { params: { invoice: string 
       return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
     }
 
+    // Cek batas waktu kadaluarsa pembayaran (10 Menit)
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const isPast10Mins = Date.now() - new Date(order.createdAt).getTime() >= TEN_MINUTES_MS;
+    if (order.status === "PENDING" && isPast10Mins) {
+      order = await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "EXPIRED" },
+        include: {
+          activations: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      });
+    }
+
     // Jika masih PENDING dan memiliki gatewayRefId (ref_no MustikaPay), auto check status langsung ke gateway
     if (order.status === "PENDING" && order.gatewayRefId) {
       try {
@@ -130,6 +146,40 @@ export async function GET(req: Request, { params }: { params: { invoice: string 
     return NextResponse.json({
       success: true,
       order,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request, { params }: { params: { invoice: string } }) {
+  try {
+    const { invoice } = params;
+    const body = await req.json().catch(() => ({}));
+    const action = body.action || "CANCEL"; // "CANCEL" | "EXPIRE"
+
+    const order = await prisma.order.findUnique({
+      where: { invoiceNumber: invoice },
+    });
+
+    if (!order) {
+      return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
+    }
+
+    if (order.status !== "PENDING") {
+      return NextResponse.json({ error: "Hanya pesanan PENDING yang dapat diubah statusnya" }, { status: 400 });
+    }
+
+    const newStatus = action === "EXPIRE" ? "EXPIRED" : "CANCELLED";
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { status: newStatus },
+    });
+
+    return NextResponse.json({
+      success: true,
+      order: updated,
+      message: action === "EXPIRE" ? "Pesanan telah kadaluarsa" : "Pesanan berhasil dibatalkan",
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
