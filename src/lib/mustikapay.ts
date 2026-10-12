@@ -59,18 +59,14 @@ export const mustikapay = {
             paymentUrl: data.payment_link,
           };
         }
+        throw new Error(data?.message || "Gagal mendapatkan QRIS dari payment gateway");
       } catch (err: any) {
         console.error("MustikaPay live API error:", err.response?.data || err.message);
+        throw new Error("Gagal membuat QRIS resmi: " + (err.response?.data?.message || err.message));
       }
     }
 
-    // Fallback Mock QRIS jika API key tidak tersedia atau koneksi offline
-    const mockQr = `00020101021226670016ID.CO.MUSTIKAPAY0118${input.invoiceNumber}520458125303360540${input.amount}5802ID5913ENCHANT STORE6007JAKARTA62070703A016304`;
-    return {
-      success: true,
-      transactionId: `MP_TRX_${Date.now()}`,
-      qrString: mockQr,
-    };
+    throw new Error("Kunci API Payment Gateway (MustikaPay) belum dikonfigurasi.");
   },
 
   /**

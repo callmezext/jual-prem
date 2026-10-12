@@ -32,7 +32,6 @@ export default function OrderDetailPage() {
   const [resending, setResending] = useState(false);
   const [resendNotice, setResendNotice] = useState("");
   const [copiedInvoice, setCopiedInvoice] = useState(false);
-  const [simulatingPay, setSimulatingPay] = useState(false);
 
   // Polling data order setiap 3 detik jika status PENDING atau WAITING_LINK
   useEffect(() => {
@@ -101,21 +100,6 @@ export default function OrderDetailPage() {
     }
   };
 
-  // Handle Simulasi Bayar Lunas (Dev & Testing Mode)
-  const handleSimulatePayment = async () => {
-    try {
-      setSimulatingPay(true);
-      const res = await axios.post("/api/orders/simulate-pay", { invoiceNumber: invoice });
-      if (res.data?.success) {
-        const updated = await axios.get(`/api/orders/${invoice}`);
-        setOrder(updated.data.order);
-      }
-    } catch (err: any) {
-      alert(err.response?.data?.error || "Gagal simulasi bayar");
-    } finally {
-      setSimulatingPay(false);
-    }
-  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
