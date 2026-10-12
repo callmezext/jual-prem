@@ -13,6 +13,8 @@ import {
   Loader2,
   Check,
   ShieldCheck,
+  ExternalLink,
+  Download,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 import Link from "next/link";
@@ -197,49 +199,101 @@ export default function OrderDetailPage() {
             </p>
           </div>
 
-          {/* QR Code Container */}
-          <div className="inline-block p-4 rounded-xl bg-white shadow-md">
-            {order.qrImageUrl ? (
-              <img
-                src={order.qrImageUrl}
-                alt={`QRIS ${order.invoiceNumber}`}
-                className="w-[240px] h-[240px] object-contain mx-auto"
-              />
-            ) : order.qrString ? (
-              <QRCodeSVG
-                value={order.qrString}
-                size={240}
-                level="M"
-                includeMargin={true}
-              />
-            ) : (
-              <div className="w-[240px] h-[240px] flex items-center justify-center text-xs text-black">
-                Memuat QRIS...
+          {/* Standee QRIS Resmi Indonesia */}
+          <div className="max-w-sm mx-auto bg-white rounded-2xl p-5 shadow-2xl border border-zinc-200 text-black space-y-4">
+            {/* Header QRIS Standar Nasional */}
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
+              <div className="text-left">
+                <span className="font-black text-2xl tracking-tight text-red-600 block leading-none">
+                  QRIS
+                </span>
+                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider block mt-1">
+                  Standar Pembayaran Nasional
+                </span>
               </div>
+              <div className="text-right">
+                <span className="text-[10px] font-black text-zinc-800 tracking-wider border border-zinc-400 px-2 py-0.5 rounded">
+                  GPN
+                </span>
+              </div>
+            </div>
+
+            {/* Info Merchant */}
+            <div className="text-center space-y-0.5">
+              <span className="text-xs font-bold text-zinc-900 block uppercase tracking-wide">
+                WARUNG GAMER SEJATI
+              </span>
+              <span className="text-[10px] font-mono text-zinc-500 block">
+                NMID: ID1026593527710
+              </span>
+            </div>
+
+            {/* QR Code Container */}
+            <div className="p-3 bg-white border border-zinc-200 rounded-xl flex items-center justify-center">
+              {order.qrImageUrl ? (
+                <img
+                  src={order.qrImageUrl}
+                  alt={`QRIS ${order.invoiceNumber}`}
+                  className="w-[260px] h-[260px] object-contain mx-auto"
+                />
+              ) : order.qrString ? (
+                <QRCodeSVG
+                  value={order.qrString}
+                  size={260}
+                  level="M"
+                  includeMargin={true}
+                />
+              ) : (
+                <div className="w-[260px] h-[260px] flex items-center justify-center text-xs text-zinc-500 font-mono">
+                  Memuat QRIS...
+                </div>
+              )}
+            </div>
+
+            {/* Footer Nominal & Keamanan */}
+            <div className="pt-1 text-center space-y-1">
+              <span className="text-xs text-zinc-500 block">Nominal Pembayaran</span>
+              <span className="text-xl font-black font-mono text-zinc-900 block">
+                {formatRupiah(order.amount)}
+              </span>
+              <span className="text-[9px] text-zinc-400 block pt-1">
+                Dicetak otomatis via MustikaPay Gateway
+              </span>
+            </div>
+          </div>
+
+          {/* Action Buttons: Buka Web MustikaPay & Unduh QRIS */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto pt-2">
+            {order.gatewayRefId && (
+              <a
+                href={`https://mustikapayment.com/pay/${order.gatewayRefId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-colors min-h-[44px]"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Buka Link Pembayaran</span>
+              </a>
+            )}
+            {order.qrImageUrl && (
+              <a
+                href={order.qrImageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={`QRIS-${order.invoiceNumber}.png`}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#18181b] hover:bg-[#27272a] text-zinc-200 border border-[#27272a] font-medium text-xs transition-colors min-h-[44px]"
+              >
+                <Download className="w-4 h-4 text-emerald-400" />
+                <span>Unduh Gambar QRIS</span>
+              </a>
             )}
           </div>
 
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3 pt-1">
             <p className="text-xs font-mono text-zinc-400 flex items-center justify-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
               <span>Sistem memeriksa status pembayaran otomatis setiap 3 detik.</span>
             </p>
-
-            {/* Tombol Simulasi Bayar untuk Pengujian Lokal */}
-            <div className="pt-4 border-t border-[#1f1f23] max-w-xs mx-auto">
-              <button
-                onClick={handleSimulatePayment}
-                disabled={simulatingPay}
-                className="w-full py-2 px-3 rounded-lg bg-[#18181b] hover:bg-[#27272a] border border-zinc-700 text-zinc-300 text-xs font-mono transition-colors flex items-center justify-center gap-2"
-              >
-                {simulatingPay ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                )}
-                <span>Simulasi Bayar Lunas (Testing Mode)</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
