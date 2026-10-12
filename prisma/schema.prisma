@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  firebaseUid String   @unique
+  email       String
+  displayName String?
+  photoUrl    String?
+  role        String   @default("customer") // "customer" | "admin"
+  apiKey      String?  @unique               // Developer / Reseller API Key
+  balance     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders       Order[]
+  memberships  UserMembership[]
+  activations  Activation[]
+}
+
+model MembershipPlan {
+  id             String   @id @default(uuid())
+  slug           String   @unique // "starter_20", "pro_50", "business_100", "unlimited_vip"
+  name           String   // e.g. "Bronze Activator (20x)"
+  quota          Int      // 20, 50, 100, -1 (unlimited)
+  durationMonths Int      @default(1) // 1 or 3
+  price          Int      // 10000, 20000, 40000, 75000
+  description    String?
+  badgeText      String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  userMemberships UserMembership[]
+}
+
+model UserMembership {
+  id             String         @id @default(uuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId         String
+  plan           MembershipPlan @relation(fields: [planId], references: [id])
+  planName       String
+  totalQuota     Int            // 20, 50, 100, -1
+  remainingQuota Int            // -1 if unlimited
+  usedQuota      Int            @default(0)
+  durationMonths Int            @default(1)
+  expiresAt      DateTime
+  status         String         @default("ACTIVE") // "ACTIVE" | "EXPIRED"
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Order {
+  id             String    @id @default(uuid())
+  invoiceNumber  String    @unique
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderType      String    // "SINGLE_VERIFY" | "MEMBERSHIP"
+  planId         String?   // Id of MembershipPlan if type is MEMBERSHIP
+  planName       String?
+  targetEmail    String?   // For SINGLE_VERIFY (Email akun Alight Motion)
+  targetNickname String?
+  amount         Int
+  status         String    @default("PENDING") // PENDING, PAID, WAITING_LINK, ACTIVATING, COMPLETED, EXPIRED, FAILED
+  qrString       String?
+  qrImageUrl     String?
+  gatewayRefId   String?
+  paidAt         DateTime?
+  retryCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  activations    Activation[]
+}
+
+model Activation {
+  id                  String   @id @default(uuid())
+  orderId             String?
+  order               Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source              String   @default("WEB_SINGLE") // "WEB_SINGLE", "WEB_MEMBERSHIP", "API_KEY"
+  targetEmail         String
+  targetNickname      String?
+  amUid               String?
+  amOrderId           String?
+  membershipStatus    String?  @default("PREMIUM_ACTIVE")
+  planName            String?  @default("Alight Motion Pro / Member")
+  subscriptionType    String?  @default("Yearly VIP License")
+  validUntil          String?
+  validUntilTimestamp String?  // Stored as string to support BigInt values
+  idToken             String?
+  refreshToken        String?
+  status              String   @default("SUCCESS")
+  createdAt           DateTime @default(now())
+}
+
+model SystemSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
