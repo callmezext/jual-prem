@@ -199,17 +199,21 @@ export default function OrderDetailPage() {
 
           {/* QR Code Container */}
           <div className="inline-block p-4 rounded-xl bg-white shadow-md">
-            {order.qrString ? (
+            {order.qrImageUrl ? (
+              <img
+                src={order.qrImageUrl}
+                alt={`QRIS ${order.invoiceNumber}`}
+                className="w-[240px] h-[240px] object-contain mx-auto"
+              />
+            ) : order.qrString ? (
               <QRCodeSVG
                 value={order.qrString}
-                size={200}
+                size={240}
                 level="M"
-                includeMargin={false}
+                includeMargin={true}
               />
-            ) : order.qrImageUrl ? (
-              <img src={order.qrImageUrl} alt="QRIS Code" className="w-[200px] h-[200px]" />
             ) : (
-              <div className="w-[200px] h-[200px] flex items-center justify-center text-xs text-black">
+              <div className="w-[240px] h-[240px] flex items-center justify-center text-xs text-black">
                 Memuat QRIS...
               </div>
             )}

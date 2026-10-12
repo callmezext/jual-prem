@@ -2,7 +2,7 @@ import axios from "axios";
 import crypto from "crypto";
 
 const BASE_URL = (process.env.MUSTIKAPAY_BASE_URL || "https://mustikapayment.com").replace(/\/$/, "");
-const API_KEY = process.env.MUSTIKAPAY_API_KEY || "";
+const API_KEY = process.env.MUSTIKAPAY_API_KEY || "MP-Em7HZVcFmajqkMO8rhk-JPtJeBK6G4Pz";
 const WEBHOOK_SECRET = process.env.MUSTIKAPAY_WEBHOOK_SECRET || "";
 
 export interface CreateQrisInput {
@@ -60,7 +60,7 @@ export const mustikapay = {
           };
         }
       } catch (err: any) {
-        console.warn("MustikaPay live API warning, fallback ke dev QRIS generator:", err.response?.data || err.message);
+        console.error("MustikaPay live API error:", err.response?.data || err.message);
       }
     }
 
