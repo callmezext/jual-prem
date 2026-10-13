@@ -39,7 +39,19 @@ export default function OrderDetailPage() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [copiedReceipt, setCopiedReceipt] = useState(false);
   const attachingQrisRef = useRef(false);
+
+  // Keyboard escape for cancel modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showCancelModal) {
+        setShowCancelModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCancelModal]);
 
   // Polling data order setiap 3 detik hanya jika status PENDING, WAITING_LINK, atau ACTIVATING
   useEffect(() => {
@@ -247,19 +259,6 @@ export default function OrderDetailPage() {
       </div>
     );
   }
-
-  const [copiedReceipt, setCopiedReceipt] = useState(false);
-
-  // Keyboard escape for cancel modal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showCancelModal) {
-        setShowCancelModal(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showCancelModal]);
 
   const copyReceiptText = () => {
     if (!order) return;
