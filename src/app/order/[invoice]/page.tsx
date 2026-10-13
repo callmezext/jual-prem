@@ -248,14 +248,155 @@ export default function OrderDetailPage() {
     );
   }
 
+  const [copiedReceipt, setCopiedReceipt] = useState(false);
+
+  // Keyboard escape for cancel modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showCancelModal) {
+        setShowCancelModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCancelModal]);
+
+  const copyReceiptText = () => {
+    if (!order) return;
+    const dateStr = new Date(order.createdAt).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const receipt = 
+      `STRUK DIGITAL ENCHANT STORE\n` +
+      `Nomor Invoice: ${order.invoiceNumber}\n` +
+      `Tanggal: ${dateStr}\n` +
+      `Layanan: ${order.orderType === "SINGLE_VERIFY" ? "Alight Motion Pro 1 Tahun" : `Membership ${order.planName}`}\n` +
+      `Akun Target: ${order.targetEmail || order.planName || "-"}\n` +
+      `Total: ${formatRupiah(order.amount)}\n` +
+      `Status: SUKSES AKTIF\n` +
+      `Garansi: 1 Tahun Resmi\n` +
+      `Verifikasi: https://jual-am.vercel.app/order/${order.invoiceNumber}`;
+
+    navigator.clipboard.writeText(receipt);
+    setCopiedReceipt(true);
+    setTimeout(() => setCopiedReceipt(false), 2000);
+  };
+
   const isPending = order.status === "PENDING";
   const isWaitingLink = order.status === "WAITING_LINK";
+  const isActivating = order.status === "ACTIVATING";
   const isCompleted = order.status === "COMPLETED";
   const isCancelled = order.status === "CANCELLED";
   const isExpired = order.status === "EXPIRED";
 
+  // Stepper Stage Calculation (1 to 4)
+  const currentStep = isCompleted
+    ? 4
+    : isWaitingLink || isActivating
+    ? 3
+    : isPending
+    ? 2
+    : 1;
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 space-y-6">
+      {/* 1. VISUAL PROGRESS STEPPER */}
+      <div className="p-4 rounded-xl bg-[#121215] border border-[#27272a]">
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {/* Step 1: Buat Pesanan */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-center">
+              <span className="w-7 h-7 rounded-full bg-emerald-950/80 border border-emerald-500 text-emerald-400 font-mono text-xs font-bold flex items-center justify-center">
+                <Check className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <span className="text-[11px] font-medium text-emerald-400 block">
+              1. Pesanan
+            </span>
+          </div>
+
+          {/* Step 2: Bayar QRIS */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-center">
+              <span
+                className={`w-7 h-7 rounded-full font-mono text-xs font-bold flex items-center justify-center ${
+                  currentStep > 2
+                    ? "bg-emerald-950/80 border border-emerald-500 text-emerald-400"
+                    : currentStep === 2
+                    ? "bg-amber-950/80 border border-amber-500 text-amber-300"
+                    : "bg-[#18181b] border border-[#27272a] text-zinc-500"
+                }`}
+              >
+                {currentStep > 2 ? <Check className="w-3.5 h-3.5" /> : "2"}
+              </span>
+            </div>
+            <span
+              className={`text-[11px] font-medium block ${
+                currentStep > 2
+                  ? "text-emerald-400"
+                  : currentStep === 2
+                  ? "text-amber-300"
+                  : "text-zinc-500"
+              }`}
+            >
+              2. Bayar QRIS
+            </span>
+          </div>
+
+          {/* Step 3: Magic Link */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-center">
+              <span
+                className={`w-7 h-7 rounded-full font-mono text-xs font-bold flex items-center justify-center ${
+                  currentStep > 3
+                    ? "bg-emerald-950/80 border border-emerald-500 text-emerald-400"
+                    : currentStep === 3
+                    ? "bg-sky-950/80 border border-sky-500 text-sky-300"
+                    : "bg-[#18181b] border border-[#27272a] text-zinc-500"
+                }`}
+              >
+                {currentStep > 3 ? <Check className="w-3.5 h-3.5" /> : "3"}
+              </span>
+            </div>
+            <span
+              className={`text-[11px] font-medium block ${
+                currentStep > 3
+                  ? "text-emerald-400"
+                  : currentStep === 3
+                  ? "text-sky-300"
+                  : "text-zinc-500"
+              }`}
+            >
+              3. Verifikasi Link
+            </span>
+          </div>
+
+          {/* Step 4: Pro Aktif */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-center">
+              <span
+                className={`w-7 h-7 rounded-full font-mono text-xs font-bold flex items-center justify-center ${
+                  currentStep === 4
+                    ? "bg-emerald-950/80 border border-emerald-500 text-emerald-400"
+                    : "bg-[#18181b] border border-[#27272a] text-zinc-500"
+                }`}
+              >
+                {currentStep === 4 ? <Check className="w-3.5 h-3.5" /> : "4"}
+              </span>
+            </div>
+            <span
+              className={`text-[11px] font-medium block ${
+                currentStep === 4 ? "text-emerald-400" : "text-zinc-500"
+              }`}
+            >
+              4. Pro Aktif
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* HEADER STATUS PESANAN */}
       <div className="p-5 rounded-xl bg-[#121215] border border-[#27272a] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -264,7 +405,7 @@ export default function OrderDetailPage() {
             <span className="text-xs font-mono font-bold text-white">{order.invoiceNumber}</span>
             <button
               onClick={() => copyToClipboard(order.invoiceNumber)}
-              className="text-zinc-400 hover:text-white p-1 rounded transition-colors"
+              className="text-zinc-400 hover:text-white p-1 rounded transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center"
               title="Salin Invoice"
               aria-label="Salin nomor invoice"
             >
@@ -621,19 +762,55 @@ export default function OrderDetailPage() {
             </div>
           )}
 
+          {/* Kartu Struk Digital & Garansi Resmi */}
+          <div className="max-w-md mx-auto p-4 rounded-xl bg-[#18181b] border border-[#27272a] text-left space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#27272a]">
+              <span className="text-[11px] font-mono text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Kartu Garansi & Struk Transaksi</span>
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/80 text-emerald-300">
+                1 Tahun Resmi
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Lisensi Anda dilindungi garansi penggantian resmi. Simpan nomor invoice dan tautan verifikasi ini sebagai tanda bukti kepemilikan lisensi.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <button
+                type="button"
+                onClick={copyReceiptText}
+                className="flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-colors min-h-[44px]"
+              >
+                {copiedReceipt ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedReceipt ? "Teks Struk Disalin" : "Salin Bukti Struk"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="py-2.5 px-3 rounded-lg bg-[#121215] hover:bg-[#27272a] border border-[#27272a] text-zinc-300 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors min-h-[44px]"
+              >
+                <Download className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Cetak Bukti</span>
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <Link
               href="/"
-              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-[#18181b] hover:bg-[#27272a] text-zinc-300 font-medium text-xs border border-[#27272a] transition-colors min-h-[44px] flex items-center justify-center"
             >
               Kembali ke Beranda
             </Link>
 
             <Link
               href="/dashboard"
-              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-[#18181b] hover:bg-[#27272a] text-white font-medium text-xs border border-[#27272a] transition-colors"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-300 border border-emerald-800/60 font-medium text-xs transition-colors min-h-[44px] flex items-center justify-center"
             >
-              Lihat Dashboard Saya
+              Buka Dashboard Pengguna
             </Link>
           </div>
         </div>

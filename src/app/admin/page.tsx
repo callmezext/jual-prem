@@ -968,8 +968,8 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Orders Table */}
-          <div className="overflow-x-auto rounded-xl border border-[#27272a] bg-[#121215]">
+          {/* Desktop Orders Table */}
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-[#27272a] bg-[#121215]">
             <table className="w-full text-left text-xs font-mono">
               <thead className="bg-[#18181b] text-zinc-400 uppercase text-[10px] tracking-wider border-b border-[#27272a]">
                 <tr>
@@ -1064,6 +1064,86 @@ export default function AdminPage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Orders Card View (md:hidden) */}
+          <div className="md:hidden space-y-3">
+            {ordersLoading ? (
+              <div className="p-8 rounded-xl bg-[#121215] border border-[#27272a] text-center text-zinc-400 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                <span>Memuat daftar pesanan...</span>
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="p-8 rounded-xl bg-[#121215] border border-[#27272a] text-center text-zinc-500 text-xs">
+                Tidak ada pesanan yang sesuai dengan filter pencarian.
+              </div>
+            ) : (
+              orders.map((ord) => (
+                <div
+                  key={ord.id}
+                  className="p-4 rounded-xl bg-[#121215] border border-[#27272a] space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setSelectedOrder(ord)}
+                      className="text-xs font-mono font-bold text-emerald-400 hover:underline"
+                    >
+                      {ord.invoiceNumber}
+                    </button>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
+                        ord.status === "COMPLETED"
+                          ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                          : ord.status === "WAITING_LINK"
+                          ? "bg-blue-500/10 border border-blue-500/30 text-blue-400"
+                          : ord.status === "CANCELLED"
+                          ? "bg-zinc-800 border border-zinc-700 text-zinc-400"
+                          : "bg-amber-500/10 border border-amber-500/30 text-amber-400"
+                      }`}
+                    >
+                      {ord.status}
+                    </span>
+                  </div>
+
+                  <div className="text-xs font-mono space-y-1">
+                    <div className="flex justify-between text-zinc-400">
+                      <span>Pembeli:</span>
+                      <span className="text-zinc-200 truncate max-w-[180px]">{ord.user?.email || "Guest"}</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-400">
+                      <span>Target / Paket:</span>
+                      <span className="text-zinc-200 truncate max-w-[180px]">{ord.targetEmail || ord.planName || "-"}</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-400">
+                      <span>Nominal:</span>
+                      <span className="text-emerald-400 font-bold">{formatRupiah(ord.amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-500 text-[11px]">
+                      <span>Waktu:</span>
+                      <span>{new Date(ord.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-[#1f1f23]">
+                    <button
+                      onClick={() => setSelectedOrder(ord)}
+                      className="flex-1 py-2 rounded-lg bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] text-zinc-200 text-xs font-medium transition-colors min-h-[44px]"
+                    >
+                      Kelola Pesanan
+                    </button>
+                    <a
+                      href={`/order/${ord.invoiceNumber}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-2 rounded-lg bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] text-zinc-300 hover:text-white text-xs flex items-center justify-center min-h-[44px] min-w-[44px]"
+                      title="Buka Invoice Publik"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Pagination Controls */}

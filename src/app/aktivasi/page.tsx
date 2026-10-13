@@ -357,6 +357,41 @@ export default function AktivasiPage() {
         </div>
       </div>
 
+      {/* 3-Step Visual Workflow Stepper Banner */}
+      <div className="p-4 rounded-xl bg-[#121215] border border-[#27272a]">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-[#18181b] border border-[#27272a]">
+            <span className="w-6 h-6 rounded-full bg-emerald-950/80 border border-emerald-500 text-emerald-400 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+              1
+            </span>
+            <div className="overflow-hidden">
+              <span className="text-xs font-bold text-white block truncate">1. Input Email Akun</span>
+              <span className="text-[11px] text-zinc-400 block truncate">Email Alight Motion aktif</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-[#18181b] border border-[#27272a]">
+            <span className="w-6 h-6 rounded-full bg-emerald-950/80 border border-emerald-500 text-emerald-400 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+              2
+            </span>
+            <div className="overflow-hidden">
+              <span className="text-xs font-bold text-white block truncate">2. Pembayaran QRIS</span>
+              <span className="text-[11px] text-zinc-400 block truncate">Otomatis terverifikasi 3 detik</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-[#18181b] border border-[#27272a]">
+            <span className="w-6 h-6 rounded-full bg-emerald-950/80 border border-emerald-500 text-emerald-400 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+              3
+            </span>
+            <div className="overflow-hidden">
+              <span className="text-xs font-bold text-white block truncate">3. Lisensi Pro 1 Thn Aktif</span>
+              <span className="text-[11px] text-zinc-400 block truncate">Instant via API resmi</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Mode Switcher Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-[#27272a] pb-3" role="tablist">
         <button
