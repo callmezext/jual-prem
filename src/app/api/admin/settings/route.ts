@@ -17,15 +17,17 @@ export async function GET() {
       plans,
     });
   } catch (err: any) {
+    console.error("Admin Settings GET Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const { singlePrice, plans } = await req.json();
+    const body = await req.json();
+    const { singlePrice, plans, settings: generalSettings } = body;
 
-    // Update single verify price jika diberikan
+    // 1. Simpan harga satuan jika dikirim
     if (singlePrice !== undefined) {
       await prisma.systemSetting.upsert({
         where: { key: "single_verify_price" },
@@ -38,7 +40,24 @@ export async function POST(req: Request) {
       });
     }
 
-    // Update harga & kuota membership plans jika diberikan
+    // 2. Simpan pengaturan umum sistem (key-value)
+    if (generalSettings && typeof generalSettings === "object") {
+      for (const [key, val] of Object.entries(generalSettings)) {
+        if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") {
+          await prisma.systemSetting.upsert({
+            where: { key },
+            update: { value: String(val) },
+            create: {
+              key,
+              value: String(val),
+              description: `Pengaturan ${key}`,
+            },
+          });
+        }
+      }
+    }
+
+    // 3. Update plans jika dikirim sebagai array
     if (Array.isArray(plans)) {
       for (const p of plans) {
         if (p.id) {
@@ -59,9 +78,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Pengaturan berhasil diperbarui!",
+      message: "Pengaturan sistem berhasil disimpan!",
     });
   } catch (err: any) {
+    console.error("Admin Settings POST Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
