@@ -39,6 +39,8 @@ import {
   ChevronRight,
   X,
   Layers,
+  Calendar,
+  CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 import { formatRupiah } from "@/lib/utils";
@@ -89,6 +91,7 @@ export default function AdminPage() {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersTotalPages, setOrdersTotalPages] = useState(1);
   const [ordersTotalCount, setOrdersTotalCount] = useState(0);
+  const [ordersFilteredAmount, setOrdersFilteredAmount] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -107,6 +110,7 @@ export default function AdminPage() {
         setOrders(res.data.orders);
         setOrdersTotalPages(res.data.totalPages);
         setOrdersTotalCount(res.data.total);
+        setOrdersFilteredAmount(res.data.totalAmount || 0);
       }
     } catch (err: any) {
       console.error("Gagal load orders:", err);
@@ -728,57 +732,100 @@ export default function AdminPage() {
             </div>
           ) : (
             <>
-              {/* Stat Cards Grid */}
+              {/* Financial & Revenue Stat Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-5 rounded-xl bg-[#121215] border border-[#27272a] space-y-2">
+                <div className="p-5 rounded-xl bg-[#121215] border border-emerald-950/60 space-y-2">
                   <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-                    <span>Total Omset Lunas</span>
+                    <span>Total Pendapatan Lunas</span>
                     <DollarSign className="w-4 h-4 text-emerald-400" />
                   </div>
                   <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-400">
                     {formatRupiah(overviewStats?.totalRevenue || 0)}
                   </div>
                   <p className="text-[11px] text-zinc-500">
-                    Dari {overviewStats?.completedOrders || 0} pesanan berhasil
+                    Dari {overviewStats?.paidOrdersCount || 0} transaksi berhasil lunas
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-[#121215] border border-[#27272a] space-y-2">
+                <div className="p-5 rounded-xl bg-[#121215] border border-blue-950/60 space-y-2">
                   <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-                    <span>Total Pesanan Masuk</span>
-                    <ShoppingCart className="w-4 h-4 text-blue-400" />
+                    <span>Pendapatan Hari Ini</span>
+                    <TrendingUp className="w-4 h-4 text-blue-400" />
                   </div>
-                  <div className="text-xl sm:text-2xl font-bold font-mono text-white">
-                    {overviewStats?.totalOrders || 0}
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-blue-400">
+                    {formatRupiah(overviewStats?.todayRevenue || 0)}
                   </div>
                   <p className="text-[11px] text-zinc-500">
-                    Semua riwayat transaksi di toko
+                    Arus kas masuk hari ini
                   </p>
                 </div>
 
-                <div className="p-5 rounded-xl bg-[#121215] border border-[#27272a] space-y-2">
+                <div className="p-5 rounded-xl bg-[#121215] border border-purple-950/60 space-y-2">
                   <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-                    <span>Pesanan Perlu Tindakan</span>
+                    <span>Pendapatan Bulan Ini</span>
+                    <Calendar className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-purple-400">
+                    {formatRupiah(overviewStats?.monthRevenue || 0)}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">
+                    Akumulasi bulan berjalan
+                  </p>
+                </div>
+
+                <div className="p-5 rounded-xl bg-[#121215] border border-amber-950/60 space-y-2">
+                  <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+                    <span>Potensi Tertunda (Pending)</span>
                     <Clock className="w-4 h-4 text-amber-400" />
                   </div>
                   <div className="text-xl sm:text-2xl font-bold font-mono text-amber-400">
-                    {overviewStats?.pendingOrders || 0}
+                    {formatRupiah(overviewStats?.pendingRevenue || 0)}
                   </div>
                   <p className="text-[11px] text-zinc-500">
-                    Status PENDING atau WAITING_LINK
+                    Dari {overviewStats?.pendingOrders || 0} pesanan menunggu bayar
+                  </p>
+                </div>
+              </div>
+
+              {/* Revenue Breakdown by Product & Operational Counts */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-5 rounded-xl bg-[#121215] border border-[#27272a] space-y-2">
+                  <span className="text-xs text-zinc-400 font-medium block">
+                    Penjualan Lisensi Eceran (Satuan)
+                  </span>
+                  <div className="text-lg font-bold font-mono text-white">
+                    {formatRupiah(overviewStats?.singleRevenue || 0)}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">
+                    Aktivasi eceran per-pcs
                   </p>
                 </div>
 
                 <div className="p-5 rounded-xl bg-[#121215] border border-[#27272a] space-y-2">
-                  <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-                    <span>Total Akun Terdaftar</span>
-                    <Users className="w-4 h-4 text-purple-400" />
-                  </div>
-                  <div className="text-xl sm:text-2xl font-bold font-mono text-white">
-                    {overviewStats?.totalUsers || 0}
+                  <span className="text-xs text-zinc-400 font-medium block">
+                    Penjualan Paket Membership Reseller
+                  </span>
+                  <div className="text-lg font-bold font-mono text-white">
+                    {formatRupiah(overviewStats?.membershipRevenue || 0)}
                   </div>
                   <p className="text-[11px] text-zinc-500">
-                    {overviewStats?.totalActivations || 0} lisensi sukses diaktifkan
+                    Langganan kuota aktivator
+                  </p>
+                </div>
+
+                <div className="p-5 rounded-xl bg-[#121215] border border-[#27272a] space-y-2">
+                  <span className="text-xs text-zinc-400 font-medium block">
+                    Rata-rata Nilai Transaksi (AOV)
+                  </span>
+                  <div className="text-lg font-bold font-mono text-white">
+                    {formatRupiah(
+                      overviewStats?.paidOrdersCount
+                        ? Math.round(overviewStats.totalRevenue / overviewStats.paidOrdersCount)
+                        : 0
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">
+                    Rata-rata nominal per order lunas
                   </p>
                 </div>
               </div>
@@ -902,6 +949,22 @@ export default function AdminPage() {
                   {st === "ALL" ? "Semua Status" : st}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Filtered Revenue & Count Calculation Bar */}
+          <div className="px-4 py-3 rounded-xl bg-[#121215] border border-[#27272a] flex flex-wrap items-center justify-between text-xs font-mono gap-3">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-emerald-400" />
+              <span className="text-zinc-400">Total Nominal Terfilter:</span>
+              <span className="text-emerald-400 font-bold text-sm">
+                {formatRupiah(ordersFilteredAmount)}
+              </span>
+            </div>
+            <div className="text-zinc-400 flex items-center gap-2">
+              <span>Status: <strong className="text-white">{ordersStatus === "ALL" ? "Semua" : ordersStatus}</strong></span>
+              <span className="text-zinc-600">•</span>
+              <span>Ditemukan: <strong className="text-white">{ordersTotalCount}</strong> transaksi</span>
             </div>
           </div>
 

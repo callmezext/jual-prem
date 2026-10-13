@@ -25,7 +25,7 @@ export async function GET(req: Request) {
       ];
     }
 
-    const [orders, total] = await Promise.all([
+    const [orders, total, totalAmountResult] = await Promise.all([
       prisma.order.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -46,14 +46,20 @@ export async function GET(req: Request) {
         take: limit,
       }),
       prisma.order.count({ where }),
+      prisma.order.aggregate({
+        where,
+        _sum: { amount: true },
+      }),
     ]);
 
     const totalPages = Math.ceil(total / limit) || 1;
+    const totalAmount = totalAmountResult._sum.amount || 0;
 
     return NextResponse.json({
       success: true,
       orders,
       total,
+      totalAmount,
       page,
       limit,
       totalPages,
