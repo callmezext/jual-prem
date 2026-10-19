@@ -141,7 +141,14 @@ export const mustikapay = {
       });
 
       const st = String(res.data?.status || "").toLowerCase();
-      const isPaid = st === "success" || st === "paid" || st === "settlement";
+      const rawSt = String(res.data?.raw?.transactionStatusDesc || "").toLowerCase();
+      const rawCode = String(res.data?.raw?.latestTransactionStatus || "");
+      const isPaid =
+        st === "success" ||
+        st === "paid" ||
+        st === "settlement" ||
+        rawSt === "success" ||
+        rawCode === "00";
 
       return {
         isPaid,

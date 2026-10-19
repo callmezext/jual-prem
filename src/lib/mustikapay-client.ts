@@ -107,3 +107,55 @@ export async function createClientQris(amount: number, invoiceNumber?: string): 
     return null;
   }
 }
+
+export interface ClientCheckQrisResult {
+  isPaid: boolean;
+  status: string;
+  raw?: any;
+  receiptUrl?: string;
+}
+
+/**
+ * Cek status transaksi langsung dari browser client ke Mustika Payment API.
+ * Berjalan tanpa kendala Cloudflare WAF IP serverless (Vercel/AWS).
+ */
+export async function checkClientQrisStatus(refNo: string): Promise<ClientCheckQrisResult> {
+  if (!refNo || refNo.startsWith("QR_INV")) {
+    return { isPaid: false, status: "unregistered" };
+  }
+
+  try {
+    const res = await fetch(`https://mustikapayment.com/api/v1/check/qris?ref_no=${encodeURIComponent(refNo)}`, {
+      method: "GET",
+      headers: {
+        "X-Api-Key": MUSTIKAPAY_API_KEY,
+        "Accept": "application/json",
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const st = String(data?.status || "").toLowerCase();
+      const rawSt = String(data?.raw?.transactionStatusDesc || "").toLowerCase();
+      const rawCode = String(data?.raw?.latestTransactionStatus || "");
+      const isPaid =
+        st === "success" ||
+        st === "paid" ||
+        st === "settlement" ||
+        rawSt === "success" ||
+        rawCode === "00";
+
+      return {
+        isPaid,
+        status: st,
+        raw: data.raw,
+        receiptUrl: data.receipt_url,
+      };
+    }
+  } catch (err) {
+    console.warn("Client check QRIS error:", err);
+  }
+
+  return { isPaid: false, status: "error" };
+}
+

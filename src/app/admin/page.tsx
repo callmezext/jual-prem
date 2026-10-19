@@ -458,7 +458,8 @@ export default function AdminPage() {
   // ---------------------------------------------------------------------------
   // TAB 6: SETTINGS STATE
   // ---------------------------------------------------------------------------
-  const [singlePrice, setSinglePrice] = useState(1000);
+  const [singlePrice, setSinglePrice] = useState(1500);
+  const [instantPrice, setInstantPrice] = useState(1000);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [waNumber, setWaNumber] = useState("628123456789");
   const [waMessage, setWaMessage] = useState("Halo admin, saya butuh bantuan aktivasi Alight Motion.");
@@ -470,7 +471,8 @@ export default function AdminPage() {
     try {
       const res = await axios.get("/api/admin/settings");
       if (res.data?.success) {
-        setSinglePrice(res.data.singlePrice || 1000);
+        setSinglePrice(res.data.singlePrice || 1500);
+        setInstantPrice(res.data.instantPrice || 1000);
         const s = res.data.settings || {};
         setMaintenanceMode(s.maintenance_mode === "true");
         setWaNumber(s.whatsapp_number || "628123456789");
@@ -489,6 +491,7 @@ export default function AdminPage() {
       setSavingSettings(true);
       const res = await axios.post("/api/admin/settings", {
         singlePrice,
+        instantPrice,
         settings: {
           maintenance_mode: maintenanceMode ? "true" : "false",
           whatsapp_number: waNumber.trim(),
@@ -2080,25 +2083,59 @@ export default function AdminPage() {
               <div>
                 <h2 className="text-sm font-semibold text-white">Tarif Aktivasi Eceran (Per-Pcs)</h2>
                 <p className="text-xs text-zinc-400">
-                  Harga publik yang dibayar pembeli satuan via QRIS otomatis di halaman checkout.
+                  Konfigurasi harga untuk opsi Akun Siap Pakai bawaan web dan opsi Email Sendiri (@gmail.com).
                 </p>
               </div>
             </div>
 
-            <div className="max-w-xs space-y-1">
-              <label className="text-xs text-zinc-300 font-medium">Nominal Harga (IDR):</label>
-              <input
-                type="number"
-                min={500}
-                step={500}
-                required
-                value={singlePrice}
-                onChange={(e) => setSinglePrice(parseInt(e.target.value, 10) || 0)}
-                className="w-full px-3 py-2.5 rounded-lg bg-[#18181b] border border-[#27272a] text-sm text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500 min-h-[44px]"
-              />
-              <p className="text-[11px] text-zinc-500 font-mono">
-                Saat ini: {formatRupiah(singlePrice)} per lisensi 1 tahun
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              {/* Opsi 1: Akun Siap Pakai */}
+              <div className="p-4 rounded-lg bg-[#18181b] border border-[#27272a] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-white font-semibold">
+                    Akun Siap Pakai (@enchant.id):
+                  </label>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/80 text-emerald-400">
+                    Auto Pro & Magic Button
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min={500}
+                  step={500}
+                  required
+                  value={instantPrice}
+                  onChange={(e) => setInstantPrice(parseInt(e.target.value, 10) || 0)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#121215] border border-[#27272a] text-sm text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500 min-h-[44px]"
+                />
+                <p className="text-[11px] text-zinc-400 font-mono">
+                  Saat ini: <strong className="text-emerald-400">{formatRupiah(instantPrice)}</strong> per lisensi (Lebih Murah)
+                </p>
+              </div>
+
+              {/* Opsi 2: Email Sendiri */}
+              <div className="p-4 rounded-lg bg-[#18181b] border border-[#27272a] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-white font-semibold">
+                    Email Pribadi (@gmail.com):
+                  </label>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300">
+                    Verifikasi Manual
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min={500}
+                  step={500}
+                  required
+                  value={singlePrice}
+                  onChange={(e) => setSinglePrice(parseInt(e.target.value, 10) || 0)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#121215] border border-[#27272a] text-sm text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500 min-h-[44px]"
+                />
+                <p className="text-[11px] text-zinc-400 font-mono">
+                  Saat ini: <strong className="text-emerald-400">{formatRupiah(singlePrice)}</strong> per lisensi
+                </p>
+              </div>
             </div>
           </div>
 

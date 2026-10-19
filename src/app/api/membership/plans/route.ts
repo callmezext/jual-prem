@@ -62,7 +62,7 @@ export async function GET() {
       });
     }
 
-    // Ambil harga satuan per-pcs dari SystemSetting (default 1000)
+    // Ambil harga satuan email sendiri dari SystemSetting (default 1500)
     let singlePriceSetting = await prisma.systemSetting.findUnique({
       where: { key: "single_verify_price" },
     });
@@ -71,15 +71,34 @@ export async function GET() {
       singlePriceSetting = await prisma.systemSetting.create({
         data: {
           key: "single_verify_price",
-          value: "1000",
-          description: "Harga 1x aktivasi satuan (per-pcs)",
+          value: "1500",
+          description: "Harga 1x aktivasi email pribadi (per-pcs)",
         },
       });
     }
 
+    // Ambil harga akun siap pakai dari SystemSetting (default 1000)
+    let instantPriceSetting = await prisma.systemSetting.findUnique({
+      where: { key: "instant_account_price" },
+    });
+
+    if (!instantPriceSetting) {
+      instantPriceSetting = await prisma.systemSetting.create({
+        data: {
+          key: "instant_account_price",
+          value: "1000",
+          description: "Harga 1x aktivasi akun siap pakai bawaan web (@enchant.id)",
+        },
+      });
+    }
+
+    const singlePriceVal = parseInt(singlePriceSetting.value, 10);
+    const instantPriceVal = parseInt(instantPriceSetting.value, 10);
+
     return NextResponse.json({
       success: true,
-      singlePrice: isNaN(parseInt(singlePriceSetting.value, 10)) ? 1000 : parseInt(singlePriceSetting.value, 10),
+      singlePrice: isNaN(singlePriceVal) ? 1500 : singlePriceVal,
+      instantPrice: isNaN(instantPriceVal) ? 1000 : instantPriceVal,
       plans,
     });
   } catch (error: any) {

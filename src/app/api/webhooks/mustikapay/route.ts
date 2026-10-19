@@ -1,132 +1,99 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { mustikapay } from "@/lib/mustikapay";
-import { ampro } from "@/lib/ampro";
+import { processPaidOrder } from "@/lib/order-processor";
+
+export async function GET() {
+  return NextResponse.json({
+    status: "active",
+    message: "MustikaPay Webhook Endpoint is ready and listening",
+    timestamp: new Date().toISOString(),
+  });
+}
 
 export async function POST(req: Request) {
   try {
-    const rawBody = await req.json();
-    const signature = req.headers.get("x-signature") || "";
+    const rawBody = await req.json().catch(() => ({}));
+    const signature = req.headers.get("x-signature") || req.headers.get("x-callback-signature") || "";
 
-    if (!mustikapay.verifySignature(rawBody, signature)) {
+    // Verifikasi signature jika header signature dikirim oleh gateway
+    if (signature && !mustikapay.verifySignature(rawBody, signature)) {
+      console.warn("[Webhook] Invalid signature received:", signature);
       return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
     }
 
-    const order_id = rawBody.order_id || rawBody.invoice || rawBody.invoice_number;
-    const status = String(rawBody.status || rawBody.transaction_status || "").toUpperCase();
+    // Ekstraksi berbagai kemungkinan format ID transaksi dari MustikaPay
+    const order_id =
+      rawBody.ref_no ||
+      rawBody.order_id ||
+      rawBody.invoice ||
+      rawBody.invoice_number ||
+      rawBody.reference_id ||
+      rawBody.originalPartnerReferenceNo ||
+      rawBody.external_id ||
+      rawBody.data?.ref_no ||
+      rawBody.data?.order_id;
 
     if (!order_id) {
-      return NextResponse.json({ error: "Missing order_id" }, { status: 400 });
+      return NextResponse.json({ error: "Missing order_id or ref_no in payload" }, { status: 400 });
     }
 
-    const order = await prisma.order.findUnique({
-      where: { invoiceNumber: order_id },
+    // Cari pesanan berdasarkan invoiceNumber ATAU gatewayRefId (ref_no MustikaPay)
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { invoiceNumber: String(order_id) },
+          { gatewayRefId: String(order_id) },
+        ],
+      },
     });
 
     if (!order) {
+      console.warn(`[Webhook] Order not found for identifier: ${order_id}`);
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (order.status !== "PENDING") {
-      return NextResponse.json({ message: "Order already processed" });
+    // Jika pesanan sudah selesai / sudah diproses
+    if (order.status !== "PENDING" && order.status !== "EXPIRED") {
+      return NextResponse.json({ message: "Order already processed", status: order.status });
     }
 
-    if (status === "PAID" || status === "SETTLEMENT" || status === "SUCCESS") {
-      if (order.orderType === "SINGLE_VERIFY") {
-        // Update order status ke WAITING_LINK
-        await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            status: "WAITING_LINK",
-            paidAt: new Date(),
-          },
-        });
+    // Ekstraksi status pembayaran dari berbagai variasi payload SNAP / REST
+    const rawSt = String(
+      rawBody.status ||
+      rawBody.transaction_status ||
+      rawBody.raw?.transactionStatusDesc ||
+      rawBody.data?.status ||
+      ""
+    ).toUpperCase();
 
-        // Otomatis kirim magic link ke email target akun Alight Motion
-        if (order.targetEmail) {
-          try {
-            await ampro.sendLink(order.targetEmail);
-          } catch (err) {
-            console.error("Gagal auto send link Ampro:", err);
-          }
-        }
-      } else if (order.orderType === "MEMBERSHIP") {
-        // Aktivasi Membership untuk User
-        const plan = await prisma.membershipPlan.findUnique({
-          where: { id: order.planId! },
-        });
+    const rawCode = String(
+      rawBody.latestTransactionStatus ||
+      rawBody.raw?.latestTransactionStatus ||
+      rawBody.response_code ||
+      ""
+    );
 
-        if (plan) {
-          // Hitung durasi masa aktif (1 bulan atau 3 bulan)
-          const now = new Date();
-          const expiresAt = new Date();
-          expiresAt.setMonth(now.getMonth() + plan.durationMonths);
+    const isPaid =
+      rawSt === "PAID" ||
+      rawSt === "SETTLEMENT" ||
+      rawSt === "SUCCESS" ||
+      rawCode === "00" ||
+      rawCode === "2005300";
 
-          // Cek apakah user sudah punya membership aktif untuk diperpanjang
-          const existingMembership = await prisma.userMembership.findFirst({
-            where: {
-              userId: order.userId,
-              status: "ACTIVE",
-              expiresAt: { gt: now },
-            },
-            orderBy: { expiresAt: "desc" },
-          });
-
-          if (existingMembership) {
-            // Perpanjang durasi membership yang ada
-            const extendedExpiry = new Date(existingMembership.expiresAt);
-            extendedExpiry.setMonth(extendedExpiry.getMonth() + plan.durationMonths);
-
-            const newTotal =
-              plan.quota === -1 || existingMembership.totalQuota === -1
-                ? -1
-                : existingMembership.totalQuota + plan.quota;
-            const newRemaining =
-              plan.quota === -1 || existingMembership.remainingQuota === -1
-                ? -1
-                : existingMembership.remainingQuota + plan.quota;
-
-            await prisma.userMembership.update({
-              where: { id: existingMembership.id },
-              data: {
-                expiresAt: extendedExpiry,
-                totalQuota: newTotal,
-                remainingQuota: newRemaining,
-                planName: `${existingMembership.planName} (Extended)`,
-              },
-            });
-          } else {
-            // Buat membership baru
-            await prisma.userMembership.create({
-              data: {
-                userId: order.userId,
-                planId: plan.id,
-                planName: plan.name,
-                totalQuota: plan.quota,
-                remainingQuota: plan.quota,
-                usedQuota: 0,
-                durationMonths: plan.durationMonths,
-                expiresAt,
-                status: "ACTIVE",
-              },
-            });
-          }
-        }
-
-        // Tandai order membership COMPLETED
-        await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            status: "COMPLETED",
-            paidAt: new Date(),
-          },
-        });
-      }
+    if (isPaid) {
+      await processPaidOrder(order.id);
+      console.log(`[Webhook] Order ${order.invoiceNumber} (${order.gatewayRefId}) marked as PAID and processed.`);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      message: isPaid ? "Order successfully processed" : "Status noted",
+      invoiceNumber: order.invoiceNumber,
+    });
   } catch (err: any) {
     console.error("Webhook Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+

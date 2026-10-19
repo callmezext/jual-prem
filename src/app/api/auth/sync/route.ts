@@ -40,19 +40,36 @@ export async function POST(req: Request) {
       const isAdminEmail = userEmail.toLowerCase() === "gunturafandy5@gmail.com";
       const role = (userCount === 0 || isAdminEmail) ? "admin" : "customer";
 
-      user = await prisma.user.create({
-        data: {
-          firebaseUid: uid,
-          email: userEmail,
-          displayName: displayName || decoded.name || userEmail.split("@")[0],
-          photoUrl: photoUrl || decoded.picture || null,
-          role,
-          apiKey: generateApiKey(),
-        },
-        include: {
-          memberships: true,
-        },
-      });
+      try {
+        user = await prisma.user.create({
+          data: {
+            firebaseUid: uid,
+            email: userEmail,
+            displayName: displayName || decoded.name || userEmail.split("@")[0],
+            photoUrl: photoUrl || decoded.picture || null,
+            role,
+            apiKey: generateApiKey(),
+          },
+          include: {
+            memberships: true,
+          },
+        });
+      } catch (createErr: any) {
+        // Fallback jika terjadi race condition pembuatan user bersamaan
+        user = await prisma.user.findUnique({
+          where: { firebaseUid: uid },
+          include: {
+            memberships: {
+              where: {
+                status: "ACTIVE",
+                expiresAt: { gt: new Date() },
+              },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        });
+      }
     } else {
       const isAdminEmail = user.email.toLowerCase() === "gunturafandy5@gmail.com";
       const shouldUpdateRole = isAdminEmail && user.role !== "admin";
@@ -79,7 +96,11 @@ export async function POST(req: Request) {
       }
     }
 
-    const activeMembership = user.memberships[0] || null;
+    if (!user) {
+      return NextResponse.json({ error: "Gagal memproses data pengguna" }, { status: 500 });
+    }
+
+    const activeMembership = user.memberships?.[0] || null;
 
     return NextResponse.json({
       success: true,

@@ -41,18 +41,20 @@ export default function HomePage() {
   const { firebaseUser, dbUser, openAuthModal } = useAuth();
   const router = useRouter();
 
-  const [singlePrice, setSinglePrice] = useState(1000);
+  const [singlePrice, setSinglePrice] = useState(1500);
+  const [instantPrice, setInstantPrice] = useState(1000);
   const [plans, setPlans] = useState<MembershipPlanItem[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [activeLang, setActiveLang] = useState<"curl" | "node" | "python">("curl");
 
-  // Fetch plans
+  // Fetch plans & prices
   useEffect(() => {
     axios
       .get("/api/membership/plans")
       .then((res) => {
         if (res.data?.singlePrice !== undefined) setSinglePrice(res.data.singlePrice);
+        if (res.data?.instantPrice !== undefined) setInstantPrice(res.data.instantPrice);
         if (res.data?.plans) setPlans(res.data.plans);
       })
       .catch((err) => console.error("Gagal memuat paket:", err))
@@ -148,9 +150,9 @@ export default function HomePage() {
         {/* Stats & Key Highlights */}
         <div className="pt-8 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl mx-auto text-left">
           <div className="p-4 rounded-xl bg-[#121215] border border-[#27272a] space-y-1">
-            <span className="text-[11px] font-mono text-zinc-400 block">Tarif Eceran</span>
-            <span className="text-base font-bold text-emerald-400">{formatRupiah(singlePrice)}</span>
-            <span className="text-[10px] text-zinc-400 block">Per lisensi aktif 1 tahun</span>
+            <span className="text-[11px] font-mono text-zinc-400 block">Tarif Mulai</span>
+            <span className="text-base font-bold text-emerald-400">{formatRupiah(instantPrice)}</span>
+            <span className="text-[10px] text-zinc-400 block">Akun Siap Pakai Pro 1 Tahun</span>
           </div>
 
           <div className="p-4 rounded-xl bg-[#121215] border border-[#27272a] space-y-1">
@@ -167,7 +169,7 @@ export default function HomePage() {
 
           <div className="p-4 rounded-xl bg-[#121215] border border-[#27272a] space-y-1">
             <span className="text-[11px] font-mono text-zinc-400 block">Jenis Akun</span>
-            <span className="text-base font-bold text-white">Akun Pribadi</span>
+            <span className="text-base font-bold text-white">Pribadi / Web</span>
             <span className="text-[10px] text-zinc-400 block">Bukan akun sharing</span>
           </div>
         </div>
@@ -236,9 +238,9 @@ export default function HomePage() {
             <span className="w-7 h-7 rounded-lg bg-[#18181b] border border-[#27272a] text-emerald-400 text-xs font-mono font-bold flex items-center justify-center">
               01
             </span>
-            <h3 className="text-sm font-semibold text-white">Buka Dashboard Aktivasi</h3>
+            <h3 className="text-sm font-semibold text-white">Pilih Jenis Akun</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Pilih opsi Beli Lisensi Satuan, masukkan email Alight Motion Anda, dan bayar tagihan QRIS otomatis.
+              Pilih Akun Siap Pakai (@enchant.id) hanya {formatRupiah(instantPrice)} atau gunakan email Gmail pribadi Anda.
             </p>
           </div>
 
@@ -246,9 +248,9 @@ export default function HomePage() {
             <span className="w-7 h-7 rounded-lg bg-[#18181b] border border-[#27272a] text-emerald-400 text-xs font-mono font-bold flex items-center justify-center">
               02
             </span>
-            <h3 className="text-sm font-semibold text-white">Kirim Link dari Aplikasi</h3>
+            <h3 className="text-sm font-semibold text-white">Bayar Tagihan QRIS</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Buka aplikasi Alight Motion &rarr; Masuk dengan Email &rarr; masukkan email Anda untuk menerima pesan login.
+              Scan QRIS resmi menggunakan BCA, Mandiri, BRI, GoPay, OVO, atau Dana dengan verifikasi pembayaran instan.
             </p>
           </div>
 
@@ -256,9 +258,9 @@ export default function HomePage() {
             <span className="w-7 h-7 rounded-lg bg-[#18181b] border border-[#27272a] text-emerald-400 text-xs font-mono font-bold flex items-center justify-center">
               03
             </span>
-            <h3 className="text-sm font-semibold text-white">Salin Tautan (Magic Link)</h3>
+            <h3 className="text-sm font-semibold text-white">Buka Aplikasi Alight</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Buka pesan dari Alight Motion di inbox email, lalu salin tautan (Copy link address) pada tombol Masuk.
+              Buka aplikasi Alight Motion di HP, masukkan email Anda, dan minta link login. Pesan verifikasi masuk otomatis terdeteksi di web.
             </p>
           </div>
 
@@ -266,9 +268,9 @@ export default function HomePage() {
             <span className="w-7 h-7 rounded-lg bg-[#18181b] border border-[#27272a] text-emerald-400 text-xs font-mono font-bold flex items-center justify-center">
               04
             </span>
-            <h3 className="text-sm font-semibold text-white">Tempel & Akun Aktif</h3>
+            <h3 className="text-sm font-semibold text-white">Klik Tombol & Login</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Tempel tautan di form aktivasi. Lisensi 1 Tahun akan aktif secara instan pada akun Anda.
+              Cukup tekan tombol &ldquo;Buka &amp; Login ke Alight Motion&rdquo; untuk langsung masuk ke aplikasi dengan status VIP Pro 1 Tahun aktif.
             </p>
           </div>
         </div>

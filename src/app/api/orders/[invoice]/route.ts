@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { mustikapay } from "@/lib/mustikapay";
-import { ampro } from "@/lib/ampro";
+import { processPaidOrder } from "@/lib/order-processor";
 
 export async function GET(req: Request, { params }: { params: { invoice: string } }) {
   try {
@@ -21,114 +21,15 @@ export async function GET(req: Request, { params }: { params: { invoice: string 
       return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
     }
 
-    // Cek batas waktu kadaluarsa pembayaran (10 Menit)
-    const TEN_MINUTES_MS = 10 * 60 * 1000;
-    const isPast10Mins = Date.now() - new Date(order.createdAt).getTime() >= TEN_MINUTES_MS;
-    if (order.status === "PENDING" && isPast10Mins) {
-      order = await prisma.order.update({
-        where: { id: order.id },
-        data: { status: "EXPIRED" },
-        include: {
-          activations: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-          },
-        },
-      });
-    }
-
-    // Jika masih PENDING dan memiliki gatewayRefId (ref_no MustikaPay), auto check status langsung ke gateway
-    if (order.status === "PENDING" && order.gatewayRefId) {
+    // 1. Jika masih PENDING atau EXPIRED tapi punya gatewayRefId, prioritaskan cek apakah sudah lunas di gateway!
+    if ((order.status === "PENDING" || order.status === "EXPIRED") && order.gatewayRefId) {
       try {
         const check = await mustikapay.checkQrisStatus(order.gatewayRefId);
         if (check.isPaid) {
-          if (order.orderType === "SINGLE_VERIFY") {
-            order = await prisma.order.update({
+          order = (await processPaidOrder(order.id)) as any;
+          if (order) {
+            order = await prisma.order.findUnique({
               where: { id: order.id },
-              data: {
-                status: "WAITING_LINK",
-                paidAt: new Date(),
-              },
-              include: {
-                activations: {
-                  orderBy: { createdAt: "desc" },
-                  take: 1,
-                },
-              },
-            });
-
-            // Otomatis kirim magic link Alight Motion
-            if (order.targetEmail) {
-              try {
-                await ampro.sendLink(order.targetEmail);
-              } catch (err) {
-                console.error("Gagal auto send link Ampro:", err);
-              }
-            }
-          } else if (order.orderType === "MEMBERSHIP") {
-            const plan = await prisma.membershipPlan.findUnique({
-              where: { id: order.planId! },
-            });
-
-            if (plan) {
-              const now = new Date();
-              const expiresAt = new Date();
-              expiresAt.setMonth(now.getMonth() + plan.durationMonths);
-
-              const existingMembership = await prisma.userMembership.findFirst({
-                where: {
-                  userId: order.userId,
-                  status: "ACTIVE",
-                  expiresAt: { gt: now },
-                },
-                orderBy: { expiresAt: "desc" },
-              });
-
-              if (existingMembership) {
-                const extendedExpiry = new Date(existingMembership.expiresAt);
-                extendedExpiry.setMonth(extendedExpiry.getMonth() + plan.durationMonths);
-
-                const newTotal =
-                  plan.quota === -1 || existingMembership.totalQuota === -1
-                    ? -1
-                    : existingMembership.totalQuota + plan.quota;
-                const newRemaining =
-                  plan.quota === -1 || existingMembership.remainingQuota === -1
-                    ? -1
-                    : existingMembership.remainingQuota + plan.quota;
-
-                await prisma.userMembership.update({
-                  where: { id: existingMembership.id },
-                  data: {
-                    expiresAt: extendedExpiry,
-                    totalQuota: newTotal,
-                    remainingQuota: newRemaining,
-                    planName: `${existingMembership.planName} (Extended)`,
-                  },
-                });
-              } else {
-                await prisma.userMembership.create({
-                  data: {
-                    userId: order.userId,
-                    planId: plan.id,
-                    planName: plan.name,
-                    totalQuota: plan.quota,
-                    remainingQuota: plan.quota,
-                    usedQuota: 0,
-                    durationMonths: plan.durationMonths,
-                    expiresAt,
-                    status: "ACTIVE",
-                  },
-                });
-              }
-            }
-
-            order = await prisma.order.update({
-              where: { id: order.id },
-              data: {
-                status: "COMPLETED",
-                paidAt: new Date(),
-              },
               include: {
                 activations: {
                   orderBy: { createdAt: "desc" },
@@ -143,9 +44,114 @@ export async function GET(req: Request, { params }: { params: { invoice: string 
       }
     }
 
+    // 2. Hanya tandai EXPIRED jika statusnya masih PENDING dan belum dibayar setelah batas 10 menit
+    if (order && order.status === "PENDING") {
+      const TEN_MINUTES_MS = 10 * 60 * 1000;
+      const isPast10Mins = Date.now() - new Date(order.createdAt).getTime() >= TEN_MINUTES_MS;
+      if (isPast10Mins) {
+        order = await prisma.order.update({
+          where: { id: order.id },
+          data: { status: "EXPIRED" },
+          include: {
+            activations: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
       order,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request, { params }: { params: { invoice: string } }) {
+  try {
+    const { invoice } = params;
+    const body = await req.json().catch(() => ({}));
+    const { gatewayRefId, gatewayData } = body;
+
+    let order = await prisma.order.findUnique({
+      where: { invoiceNumber: invoice },
+      include: {
+        activations: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!order) {
+      return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
+    }
+
+    if (order.status !== "PENDING" && order.status !== "EXPIRED") {
+      return NextResponse.json({
+        success: true,
+        order,
+        message: "Pesanan sudah diproses sebelumnya",
+      });
+    }
+
+    const refToUse = order.gatewayRefId || gatewayRefId || gatewayData?.ref_no;
+    let isVerified = false;
+
+    // 1. Cek langsung via server
+    if (refToUse) {
+      try {
+        const check = await mustikapay.checkQrisStatus(refToUse);
+        if (check.isPaid) {
+          isVerified = true;
+        }
+      } catch (err) {
+        console.warn("Server-side check failed:", err);
+      }
+    }
+
+    // 2. Jika server-side terhalang WAF Cloudflare Vercel, validasi data verifikasi browser client
+    if (!isVerified && gatewayData && refToUse) {
+      const isRefMatch = gatewayData.ref_no === refToUse;
+      const isStatusSuccess =
+        gatewayData.isPaid === true ||
+        gatewayData.status === "success" ||
+        gatewayData.raw?.latestTransactionStatus === "00" ||
+        String(gatewayData.raw?.transactionStatusDesc || "").toLowerCase() === "success";
+
+      if (isRefMatch && isStatusSuccess) {
+        isVerified = true;
+      }
+    }
+
+    if (isVerified) {
+      order = (await processPaidOrder(order.id)) as any;
+      if (order) {
+        order = await prisma.order.findUnique({
+          where: { id: order.id },
+          include: {
+            activations: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        });
+      }
+      return NextResponse.json({
+        success: true,
+        order,
+        message: "Pembayaran berhasil diverifikasi!",
+      });
+    }
+
+    return NextResponse.json({
+      success: false,
+      order,
+      message: "Pembayaran belum terdeteksi di server gateway.",
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

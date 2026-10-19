@@ -61,8 +61,44 @@ export async function POST(req: Request) {
     let amount = 1000;
     let planName: string | null = null;
     let activePlanId = planId;
+    let finalTargetEmail = targetEmail?.trim() || null;
 
-    if (orderType === "SINGLE_VERIFY") {
+    if (orderType === "INSTANT_ACCOUNT") {
+      // Cek ketersediaan server Ampro
+      const amStatus = await ampro.getStatus();
+      if (amStatus.status !== "online") {
+        return NextResponse.json(
+          { error: "Server aktivasi sedang pemeliharaan. Coba beberapa saat lagi." },
+          { status: 503 }
+        );
+      }
+
+      // Ambil harga akun siap pakai dari setting (default 1000)
+      const setting = await prisma.systemSetting.findUnique({
+        where: { key: "instant_account_price" },
+      });
+      if (setting && setting.value !== undefined && setting.value !== null) {
+        const parsed = parseInt(setting.value, 10);
+        amount = isNaN(parsed) ? 1000 : parsed;
+      } else {
+        amount = 1000;
+      }
+
+      // Generate atau gunakan custom username untuk email @enchant.id
+      const rawUser = (targetNickname || targetEmail || "am_" + Math.random().toString(36).substring(2, 8))
+        .toLowerCase()
+        .replace(/[^a-z0-9_.-]/g, "");
+      const cleanUser = rawUser.startsWith("am_") ? rawUser : `am_${rawUser}`.substring(0, 20);
+      finalTargetEmail = `${cleanUser}@enchant.id`;
+
+      // Buat mailbox di Tempmail Hub
+      try {
+        const { tempmail } = await import("@/lib/tempmail");
+        await tempmail.createMailbox(cleanUser);
+      } catch (err: any) {
+        console.warn("Gagal create mailbox tempmail saat checkout:", err.message);
+      }
+    } else if (orderType === "SINGLE_VERIFY") {
       if (!targetEmail || !targetEmail.includes("@")) {
         return NextResponse.json({ error: "Email target akun Alight Motion wajib diisi" }, { status: 400 });
       }
@@ -76,14 +112,17 @@ export async function POST(req: Request) {
         );
       }
 
-      // Ambil harga satuan dari setting
+      // Ambil harga satuan dari setting (default 1500)
       const setting = await prisma.systemSetting.findUnique({
         where: { key: "single_verify_price" },
       });
       if (setting && setting.value !== undefined && setting.value !== null) {
         const parsed = parseInt(setting.value, 10);
-        amount = isNaN(parsed) ? 1000 : parsed;
+        amount = isNaN(parsed) ? 1500 : parsed;
+      } else {
+        amount = 1500;
       }
+      finalTargetEmail = targetEmail.trim();
     } else if (orderType === "MEMBERSHIP") {
       let plan = null;
       if (planId) {
@@ -114,7 +153,7 @@ export async function POST(req: Request) {
           orderType,
           planId: activePlanId || null,
           planName,
-          targetEmail: targetEmail || null,
+          targetEmail: finalTargetEmail || null,
           targetNickname: targetNickname || null,
           amount: 0,
           status: "WAITING_LINK",
@@ -123,9 +162,9 @@ export async function POST(req: Request) {
       });
 
       // Otomatis kirim magic link ke email Alight Motion
-      if (targetEmail) {
+      if (finalTargetEmail) {
         try {
-          await ampro.sendLink(targetEmail);
+          await ampro.sendLink(finalTargetEmail);
         } catch (err) {
           console.warn("Gagal auto send link:", err);
         }
@@ -182,7 +221,7 @@ export async function POST(req: Request) {
         orderType,
         planId: activePlanId || null,
         planName,
-        targetEmail: targetEmail || null,
+        targetEmail: finalTargetEmail || null,
         targetNickname: targetNickname || null,
         amount,
         status: "PENDING",

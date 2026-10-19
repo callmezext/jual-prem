@@ -22,6 +22,7 @@ import {
   Key,
   Mail,
   User,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { formatRupiah } from "@/lib/utils";
@@ -35,11 +36,14 @@ export default function AktivasiPage() {
   const [activeTab, setActiveTab] = useState<"ORDER" | "VERIFY" | "MEMBER">("ORDER");
 
   // Price & Server Status
-  const [singlePrice, setSinglePrice] = useState(1000);
+  const [singlePrice, setSinglePrice] = useState(1500);
+  const [instantPrice, setInstantPrice] = useState(1000);
   const [loadingPrice, setLoadingPrice] = useState(true);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
 
-  // Form State: Order Satuan (QRIS)
+  // Form State: Order Satuan (Pilihan Akun di Awal)
+  const [accountOption, setAccountOption] = useState<"INSTANT" | "GMAIL">("INSTANT");
+  const [customUsername, setCustomUsername] = useState("");
   const [targetEmail, setTargetEmail] = useState("");
   const [targetNickname, setTargetNickname] = useState("");
   const [isSubmittingSingle, setIsSubmittingSingle] = useState(false);
@@ -67,11 +71,12 @@ export default function AktivasiPage() {
   }>({ type: "idle", text: "" });
 
   useEffect(() => {
-    // Ambil harga satuan
+    // Ambil harga satuan dan akun bawaan web
     axios
       .get("/api/membership/plans")
       .then((res) => {
         if (res.data?.singlePrice !== undefined) setSinglePrice(res.data.singlePrice);
+        if (res.data?.instantPrice !== undefined) setInstantPrice(res.data.instantPrice);
       })
       .catch((err) => console.error("Gagal load harga:", err))
       .finally(() => setLoadingPrice(false));
@@ -90,7 +95,7 @@ export default function AktivasiPage() {
     }
   }, [dbUser]);
 
-  // Handler: Checkout Lisensi Satuan
+  // Handler: Checkout Lisensi Satuan (Akun Siap Pakai atau Email Pribadi)
   const handleBuySingle = async (e: React.FormEvent) => {
     e.preventDefault();
     setSingleError("");
@@ -100,25 +105,30 @@ export default function AktivasiPage() {
       return;
     }
 
-    if (!targetEmail || !targetEmail.includes("@")) {
-      setSingleError("Masukkan alamat email Alight Motion yang valid.");
-      return;
+    if (accountOption === "GMAIL") {
+      if (!targetEmail || !targetEmail.includes("@")) {
+        setSingleError("Masukkan alamat email Alight Motion yang valid.");
+        return;
+      }
     }
 
     try {
       setIsSubmittingSingle(true);
+      const selectedPrice = accountOption === "INSTANT" ? instantPrice : singlePrice;
 
       // Buat QRIS langsung dari browser client untuk menghindari Cloudflare 403
-      const qrisData = await createClientQris(1500);
+      const qrisData = await createClientQris(selectedPrice);
 
       const res = await axios.post("/api/orders/create", {
         userId: dbUser?.id || undefined,
         firebaseUid: firebaseUser.uid,
         userEmail: firebaseUser.email,
         userDisplayName: firebaseUser.displayName || undefined,
-        orderType: "SINGLE_VERIFY",
-        targetEmail: targetEmail.trim(),
-        targetNickname: targetNickname.trim() || undefined,
+        orderType: accountOption === "INSTANT" ? "INSTANT_ACCOUNT" : "SINGLE_VERIFY",
+        targetEmail: accountOption === "GMAIL" ? targetEmail.trim() : undefined,
+        targetNickname: accountOption === "INSTANT"
+          ? (customUsername.trim() || targetNickname.trim() || undefined)
+          : (targetNickname.trim() || undefined),
         qrisData: qrisData || undefined,
       });
 
@@ -450,36 +460,138 @@ export default function AktivasiPage() {
         <div className="lg:col-span-7 space-y-6">
           {/* TAB 1: BELI SATUAN */}
           {activeTab === "ORDER" && (
-            <div className="p-6 rounded-xl bg-[#121215] border border-[#27272a] space-y-5">
+            <div className="p-6 rounded-xl bg-[#121215] border border-[#27272a] space-y-6">
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <h2 className="text-base font-semibold text-white">Form Pemesanan Lisensi Satuan</h2>
                   <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
-                    {loadingPrice ? "Memuat..." : formatRupiah(singlePrice)}
+                    {loadingPrice ? "Memuat..." : formatRupiah(accountOption === "INSTANT" ? instantPrice : singlePrice)}
                   </span>
                 </div>
                 <p className="text-xs text-zinc-400">
-                  Pembayaran otomatis via QRIS MustikaPay. Lisensi aktif selama 1 Tahun penuh pada akun pribadi.
+                  Pembayaran otomatis via QRIS MustikaPay. Lisensi resmi Alight Motion Pro 1 Tahun penuh.
                 </p>
               </div>
 
-              <form onSubmit={handleBuySingle} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-300">
-                    Email Akun Alight Motion <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={targetEmail}
-                    onChange={(e) => setTargetEmail(e.target.value)}
-                    placeholder="nama@gmail.com"
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-[#18181b] border border-[#27272a] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors min-h-[44px]"
-                  />
-                  <p className="text-[11px] text-zinc-500">
-                    Pastikan email ini terdaftar atau digunakan login pada aplikasi Alight Motion Anda.
-                  </p>
+              {/* PILIHAN TIPE AKUN DI AWAL */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-zinc-300 block">
+                  Pilih Tipe Akun <span className="text-rose-400">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* OPSI A: AKUN SIAP PAKAI (@enchant.id) */}
+                  <button
+                    type="button"
+                    onClick={() => setAccountOption("INSTANT")}
+                    className={`relative p-4 rounded-xl transition-all border text-left min-h-[44px] ${
+                      accountOption === "INSTANT"
+                        ? "bg-emerald-950/20 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                        : "bg-[#18181b] border-[#27272a] hover:border-zinc-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <Sparkles className="w-3 h-3" />
+                        LEBIH MURAH & PRAKTIS
+                      </span>
+                      {accountOption === "INSTANT" && (
+                        <div className="w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-white">Akun Siap Pakai (@enchant.id)</h3>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">
+                        Email baru otomatis dibuatkan. Langsung aktif Pro 1 Tahun dan login sekali klik dari invoice!
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-[#27272a] flex items-baseline justify-between">
+                      <span className="text-[11px] text-zinc-400">Harga Spesial</span>
+                      <span className="text-sm font-mono font-bold text-emerald-400">
+                        {loadingPrice ? "..." : formatRupiah(instantPrice)}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* OPSI B: EMAIL SENDIRI (@gmail.com) */}
+                  <button
+                    type="button"
+                    onClick={() => setAccountOption("GMAIL")}
+                    className={`relative p-4 rounded-xl transition-all border text-left min-h-[44px] ${
+                      accountOption === "GMAIL"
+                        ? "bg-emerald-950/20 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                        : "bg-[#18181b] border-[#27272a] hover:border-zinc-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        <Mail className="w-3 h-3" />
+                        EMAIL PRIBADI
+                      </span>
+                      {accountOption === "GMAIL" && (
+                        <div className="w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-white">Email Sendiri (@gmail.com)</h3>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">
+                        Gunakan akun Gmail pribadi Anda. Link login dikirimkan ke kotak masuk Gmail Anda.
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-[#27272a] flex items-baseline justify-between">
+                      <span className="text-[11px] text-zinc-400">Tarif Normal</span>
+                      <span className="text-sm font-mono font-bold text-zinc-200">
+                        {loadingPrice ? "..." : formatRupiah(singlePrice)}
+                      </span>
+                    </div>
+                  </button>
                 </div>
+              </div>
+
+              <form onSubmit={handleBuySingle} className="space-y-4">
+                {accountOption === "INSTANT" ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-300">
+                      Awalan Username Email (Opsional)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={customUsername}
+                        onChange={(e) => setCustomUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
+                        placeholder="Contoh: kreator99 (kosongkan untuk acak)"
+                        className="w-full px-3.5 py-2.5 rounded-lg bg-[#18181b] border border-[#27272a] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors min-h-[44px]"
+                      />
+                    </div>
+                    <p className="text-[11px] text-zinc-500">
+                      Alamat email siap pakai Anda akan berakhiran{" "}
+                      <span className="text-emerald-400 font-mono">
+                        @{customUsername.trim() ? `${customUsername.trim()}@enchant.id` : "enchant.id"}
+                      </span>
+                      .
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-300">
+                      Alamat Email Gmail Anda <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={targetEmail}
+                      onChange={(e) => setTargetEmail(e.target.value)}
+                      placeholder="nama@gmail.com"
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-[#18181b] border border-[#27272a] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors min-h-[44px]"
+                    />
+                    <p className="text-[11px] text-zinc-500">
+                      Pastikan akun Gmail ini aktif karena link aktivasi Alight Motion akan dikirimkan ke sini.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-300">
@@ -489,7 +601,7 @@ export default function AktivasiPage() {
                     type="text"
                     value={targetNickname}
                     onChange={(e) => setTargetNickname(e.target.value)}
-                    placeholder="Contoh: Budi Studio"
+                    placeholder="Contoh: Alight Editor"
                     className="w-full px-3.5 py-2.5 rounded-lg bg-[#18181b] border border-[#27272a] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors min-h-[44px]"
                   />
                 </div>
@@ -514,7 +626,9 @@ export default function AktivasiPage() {
                       </>
                     ) : (
                       <>
-                        <span>Lanjut Bayar QRIS ({formatRupiah(singlePrice)})</span>
+                        <span>
+                          Lanjut Bayar QRIS ({formatRupiah(accountOption === "INSTANT" ? instantPrice : singlePrice)})
+                        </span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}

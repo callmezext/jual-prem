@@ -12,7 +12,8 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      singlePrice: settingsMap.single_verify_price !== undefined ? parseInt(settingsMap.single_verify_price, 10) : 1000,
+      singlePrice: settingsMap.single_verify_price !== undefined ? parseInt(settingsMap.single_verify_price, 10) : 1500,
+      instantPrice: settingsMap.instant_account_price !== undefined ? parseInt(settingsMap.instant_account_price, 10) : 1000,
       settings: settingsMap,
       plans,
     });
@@ -25,9 +26,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { singlePrice, plans, settings: generalSettings } = body;
+    const { singlePrice, instantPrice, plans, settings: generalSettings } = body;
 
-    // 1. Simpan harga satuan jika dikirim
+    // 1. Simpan harga email sendiri jika dikirim
     if (singlePrice !== undefined) {
       await prisma.systemSetting.upsert({
         where: { key: "single_verify_price" },
@@ -35,12 +36,25 @@ export async function POST(req: Request) {
         create: {
           key: "single_verify_price",
           value: String(singlePrice),
-          description: "Harga 1x aktivasi satuan (per-pcs)",
+          description: "Harga 1x aktivasi email pribadi (per-pcs)",
         },
       });
     }
 
-    // 2. Simpan pengaturan umum sistem (key-value)
+    // 2. Simpan harga akun siap pakai (@enchant.id) jika dikirim
+    if (instantPrice !== undefined) {
+      await prisma.systemSetting.upsert({
+        where: { key: "instant_account_price" },
+        update: { value: String(instantPrice) },
+        create: {
+          key: "instant_account_price",
+          value: String(instantPrice),
+          description: "Harga 1x aktivasi akun siap pakai bawaan web (@enchant.id)",
+        },
+      });
+    }
+
+    // 3. Simpan pengaturan umum sistem (key-value)
     if (generalSettings && typeof generalSettings === "object") {
       for (const [key, val] of Object.entries(generalSettings)) {
         if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") {
@@ -57,7 +71,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Update plans jika dikirim sebagai array
+    // 4. Update plans jika dikirim sebagai array
     if (Array.isArray(plans)) {
       for (const p of plans) {
         if (p.id) {
